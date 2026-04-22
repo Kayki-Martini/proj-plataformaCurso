@@ -1,0 +1,226 @@
+services:
+  auth-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data
+      - ./services/auth-service/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+
+  user-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: user_db
+      POSTGRES_USER: user_user
+      POSTGRES_PASSWORD: user_pass
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+      - ./services/user-service/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+
+  course-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: course_db
+      POSTGRES_USER: course_user
+      POSTGRES_PASSWORD: course_pass
+    volumes:
+      - course-db-data:/var/lib/postgresql/data
+      - ./services/course-service/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+
+  enrollment-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: enrollment_db
+      POSTGRES_USER: enrollment_user
+      POSTGRES_PASSWORD: enrollment_pass
+    volumes:
+      - enrollment-db-data:/var/lib/postgresql/data
+      - ./services/enrollment-service/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+
+  lesson-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lesson_db
+      POSTGRES_USER: lesson_user
+      POSTGRES_PASSWORD: lesson_pass
+    volumes:
+      - lesson-db-data:/var/lib/postgresql/data
+      - ./services/lesson-service/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+
+  progress-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: progress_db
+      POSTGRES_USER: progress_user
+      POSTGRES_PASSWORD: progress_pass
+    volumes:
+      - progress-db-data:/var/lib/postgresql/data
+      - ./services/progress-service/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+
+  payment-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: payment_db
+      POSTGRES_USER: payment_user
+      POSTGRES_PASSWORD: payment_pass
+    volumes:
+      - payment-db-data:/var/lib/postgresql/data
+      - ./services/payment-service/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://auth_user:auth_pass@auth-db:5432/auth_db
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-720}
+      ADMIN_REGISTRATION_CODE: ${ADMIN_REGISTRATION_CODE:-ead-admin-2026}
+      SERVICE_PORT: 8000
+    depends_on:
+      - auth-db
+    ports:
+      - "8001:8000"
+
+  user-service:
+    build:
+      context: ./services/user-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://user_user:user_pass@user-db:5432/user_db
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      SERVICE_PORT: 8000
+    depends_on:
+      - user-db
+    ports:
+      - "8002:8000"
+
+  course-service:
+    build:
+      context: ./services/course-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://course_user:course_pass@course-db:5432/course_db
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      SERVICE_PORT: 8000
+    depends_on:
+      - course-db
+    ports:
+      - "8003:8000"
+
+  enrollment-service:
+    build:
+      context: ./services/enrollment-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://enrollment_user:enrollment_pass@enrollment-db:5432/enrollment_db
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      USER_SERVICE_URL: http://user-service:8000
+      COURSE_SERVICE_URL: http://course-service:8000
+      PAYMENT_SERVICE_URL: http://payment-service:8000
+      SERVICE_PORT: 8000
+    depends_on:
+      - enrollment-db
+      - user-service
+      - course-service
+      - payment-service
+    ports:
+      - "8004:8000"
+
+  lesson-service:
+    build:
+      context: ./services/lesson-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://lesson_user:lesson_pass@lesson-db:5432/lesson_db
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      SERVICE_PORT: 8000
+    depends_on:
+      - lesson-db
+    ports:
+      - "8005:8000"
+
+  progress-service:
+    build:
+      context: ./services/progress-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://progress_user:progress_pass@progress-db:5432/progress_db
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ENROLLMENT_SERVICE_URL: http://enrollment-service:8000
+      LESSON_SERVICE_URL: http://lesson-service:8000
+      COURSE_SERVICE_URL: http://course-service:8000
+      SERVICE_PORT: 8000
+    depends_on:
+      - progress-db
+      - enrollment-service
+      - lesson-service
+    ports:
+      - "8006:8000"
+
+  payment-service:
+    build:
+      context: ./services/payment-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://payment_user:payment_pass@payment-db:5432/payment_db
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      COURSE_SERVICE_URL: http://course-service:8000
+      SERVICE_PORT: 8000
+    depends_on:
+      - payment-db
+      - course-service
+    ports:
+      - "8007:8000"
+
+  gateway:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - auth-service
+      - user-service
+      - course-service
+      - enrollment-service
+      - lesson-service
+      - progress-service
+      - payment-service
+    ports:
+      - "8080:80"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+    restart: unless-stopped
+    depends_on:
+      - gateway
+    ports:
+      - "3000:80"
+
+volumes:
+  auth-db-data:
+  user-db-data:
+  course-db-data:
+  enrollment-db-data:
+  lesson-db-data:
+  progress-db-data:
+  payment-db-data:

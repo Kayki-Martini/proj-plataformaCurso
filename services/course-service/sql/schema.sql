@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS courses (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(150) NOT NULL,
+    description TEXT NOT NULL,
+    category VARCHAR(80),
+    cohort_name VARCHAR(80) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    capacity INTEGER NOT NULL DEFAULT 200 CHECK (capacity <= 200),
+    price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
