@@ -188,9 +188,24 @@ function formatCurrency(value) {
   }).format(Number(value ?? 0))
 }
 
-function getDaysUntil(value) {
-  const diff = new Date(value).getTime() - Date.now()
-  return Math.ceil(diff / (1000 * 60 * 60 * 24))
+function normalizeDigits(value) {
+  return String(value ?? "").replace(/\D/g, "")
+}
+
+function detectCardBrand(cardNumber) {
+  const digits = normalizeDigits(cardNumber)
+  if (digits.startsWith("4")) return "Visa"
+  if (/^5[1-5]/.test(digits) || /^2(2[2-9]|[3-6]\d|7[01])/.test(digits)) return "Mastercard"
+  if (/^3[47]/.test(digits)) return "Amex"
+  if (/^6(?:011|5)/.test(digits)) return "Discover"
+  if (/^35/.test(digits)) return "JCB"
+  return "Cartao de credito"
+}
+
+function sumPaidAmount(payments) {
+  return payments
+    .filter((item) => item.status === "paid")
+    .reduce((acc, item) => acc + Number(item.amount ?? 0), 0)
 }
 
 function DashboardPage({
@@ -212,6 +227,7 @@ function DashboardPage({
     telegram: "",
     city: "",
     state: "",
+    education_level: "medio",
   })
   const [saving, setSaving] = useState(false)
 
@@ -224,6 +240,7 @@ function DashboardPage({
       telegram: profile?.telegram ?? "",
       city: profile?.city ?? "",
       state: profile?.state ?? "",
+      education_level: profile?.education_level ?? "medio",
     })
   }, [profile, currentUser])
 
@@ -231,10 +248,8 @@ function DashboardPage({
     progress.length > 0
       ? Math.round(progress.reduce((acc, item) => acc + item.percentage, 0) / progress.length)
       : 0
-  const paidCourses = payments.filter((item) => item.status === "paid").length
-  const nextExpiry = enrollments
-    .map((item) => item.access_expires_at)
-    .sort((a, b) => new Date(a) - new Date(b))[0]
+  const paidLessons = payments.filter((item) => item.status === "paid").length
+  const totalSpent = sumPaidAmount(payments)
 
   if (currentUser?.role === "admin") {
     return (
@@ -257,7 +272,7 @@ function DashboardPage({
 
           <div className="grid gap-4">
             <StatCard label="Cursos publicados" value={courses.length} accent="from-surf to-cyan-400" />
-            <StatCard label="Pagamentos do seu usuario" value={paidCourses} accent="from-mango to-coral" />
+            <StatCard label="Pagamentos do seu usuario" value={paidLessons} accent="from-mango to-coral" />
             <StatCard label="Acesso administrativo" value="ativo" accent="from-emerald-400 to-lime-300" />
           </div>
         </section>
@@ -343,10 +358,10 @@ function DashboardPage({
         <div className="grid gap-4">
           <StatCard label="Cursos ativos" value={enrollments.length} accent="from-surf to-cyan-400" />
           <StatCard label="Media de progresso" value={`${averageProgress}%`} accent="from-mango to-coral" />
-          <StatCard label="Pagamentos aprovados" value={paidCourses} accent="from-emerald-400 to-lime-300" />
+          <StatCard label="Aulas pagas" value={paidLessons} accent="from-emerald-400 to-lime-300" />
           <StatCard
-            label="Acesso mais proximo do fim"
-            value={nextExpiry ? `${Math.max(getDaysUntil(nextExpiry), 0)} dias` : "-"}
+            label="Total investido"
+            value={formatCurrency(totalSpent)}
             accent="from-fuchsia-400 to-sky-400"
           />
         </div>
@@ -376,6 +391,18 @@ function DashboardPage({
             />
             <FieldInput label="Cidade" value={form.city} onChange={(value) => setForm((prev) => ({ ...prev, city: value }))} />
             <FieldInput label="Estado" value={form.state} onChange={(value) => setForm((prev) => ({ ...prev, state: value }))} />
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-200">Escolaridade</label>
+              <select
+                className="soft-input"
+                onChange={(event) => setForm((prev) => ({ ...prev, education_level: event.target.value }))}
+                value={form.education_level}
+              >
+                <option value="medio">Ensino medio</option>
+                <option value="superior">Ensino superior</option>
+                <option value="pos-graduacao">Pos-graduacao</option>
+              </select>
+            </div>
           </div>
           <button className="soft-button-primary mt-6 w-full" disabled={saving} type="submit">
             {saving ? "Salvando..." : profile?.id ? "Atualizar perfil" : "Criar perfil"}
@@ -422,7 +449,6 @@ function CoursesPage({
   profile,
   courses,
   enrollments,
-  payments,
   onEnroll,
   notice,
 }) {
@@ -440,7 +466,7 @@ function CoursesPage({
             Cursos organizados por turma, janela de matricula e valor.
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300">
-            Aqui fica a vitrine da operacao EAD. Para administradores, o cadastro de cursos e a montagem das aulas em cards agora vivem no Studio Admin.
+            Aqui fica a vitrine da operacao EAD. Cursos pagos agora cobram no cartao aula por aula, conforme o aluno conclui a trilha.
           </p>
           {currentUser?.role === "admin" ? (
             <div className="mt-6 rounded-3xl border border-surf/25 bg-surf/[0.08] p-5">
@@ -476,7 +502,6 @@ function CoursesPage({
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {courses.map((course) => {
           const enrollment = enrollments.find((item) => item.course_id === course.id)
-          const payment = payments.find((item) => item.course_id === course.id && item.status === "paid")
           return (
             <article key={course.id} className="glass-panel flex flex-col p-6">
               <div className="mb-4 flex items-center justify-between gap-3">
@@ -484,7 +509,7 @@ function CoursesPage({
                   {course.category || "trilha"}
                 </span>
                 <span className="rounded-full bg-mango/[0.15] px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-mango">
-                  {course.is_paid ? formatCurrency(course.price) : "gratuito"}
+                  {course.is_paid ? `${formatCurrency(course.price)} por aula` : "gratuito"}
                 </span>
               </div>
               <h2 className="text-2xl font-semibold text-white">{course.title}</h2>
@@ -509,9 +534,12 @@ function CoursesPage({
                   onClick={() => onEnroll(course)}
                   type="button"
                 >
-                  {course.is_paid && !payment ? "Pagar e matricular" : "Matricular agora"}
+                  Matricular agora
                 </button>
               )}
+              {course.is_paid ? (
+                <p className="mt-3 text-xs leading-5 text-slate-300">O cartao de credito sera cobrado apenas nas aulas pagas que voce concluir.</p>
+              ) : null}
               {!profile?.cpf && currentUser?.role !== "admin" ? (
                 <p className="mt-3 text-xs text-coral">Complete seu perfil com CPF no dashboard antes de se matricular.</p>
               ) : null}
@@ -529,9 +557,11 @@ function LessonsPage({
   enrollments,
   progress,
   lessons,
+  payments,
   selectedCourseId,
   onSelectCourse,
   onCompleteLesson,
+  onNotice,
   notice,
 }) {
   const visibleCourses =
@@ -542,6 +572,79 @@ function LessonsPage({
   const activeProgress = progress.find((item) => item.course_id === Number(selectedCourseId))
   const completedCount = activeProgress?.completed_lessons ?? 0
   const availableLessons = activeProgress?.available_lessons ?? 0
+  const [paymentModalLesson, setPaymentModalLesson] = useState(null)
+  const [processingLessonId, setProcessingLessonId] = useState(null)
+  const [paymentForm, setPaymentForm] = useState({
+    card_holder_name: currentUser?.name ?? "",
+    card_number: "",
+    expiry_month: "",
+    expiry_year: "",
+    cvv: "",
+  })
+
+  useEffect(() => {
+    setPaymentModalLesson(null)
+    setPaymentForm({
+      card_holder_name: currentUser?.name ?? "",
+      card_number: "",
+      expiry_month: "",
+      expiry_year: "",
+      cvv: "",
+    })
+  }, [currentUser?.name, selectedCourseId])
+
+  const paymentBrand = detectCardBrand(paymentForm.card_number)
+
+  function openPaymentModal(lesson) {
+    setPaymentModalLesson(lesson)
+    setPaymentForm({
+      card_holder_name: currentUser?.name ?? "",
+      card_number: "",
+      expiry_month: "",
+      expiry_year: "",
+      cvv: "",
+    })
+  }
+
+  function closePaymentModal() {
+    setPaymentModalLesson(null)
+  }
+
+  async function submitLessonCompletion(lesson, paymentPayload) {
+    setProcessingLessonId(lesson.id)
+    try {
+      await onCompleteLesson(Number(selectedCourseId), lesson.id, paymentPayload ? { payment: paymentPayload } : undefined)
+      if (paymentPayload) {
+        closePaymentModal()
+      }
+    } catch (error) {
+      onNotice({ type: "error", text: error.message })
+    } finally {
+      setProcessingLessonId(null)
+    }
+  }
+
+  async function handleLessonAction(lesson, paymentRecord) {
+    if (Number(lesson.price ?? 0) > 0 && !paymentRecord) {
+      openPaymentModal(lesson)
+      return
+    }
+
+    await submitLessonCompletion(lesson)
+  }
+
+  async function handlePaymentSubmit(event) {
+    event.preventDefault()
+    if (!paymentModalLesson) return
+
+    await submitLessonCompletion(paymentModalLesson, {
+      card_holder_name: paymentForm.card_holder_name.trim(),
+      card_number: paymentForm.card_number.trim(),
+      expiry_month: Number(paymentForm.expiry_month),
+      expiry_year: Number(paymentForm.expiry_year),
+      cvv: paymentForm.cvv.trim(),
+    })
+  }
 
   return (
     <div className="page-enter space-y-6">
@@ -554,7 +657,7 @@ function LessonsPage({
             Aulas em cards com liberacao semanal e ordem protegida.
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300">
-            Cada aula pode combinar texto, imagem, video, PDF, links externos ou embeds. O aluno sempre enxerga o que ja esta liberado e segue a trilha sem quebrar a sequencia.
+            Cada aula pode combinar texto, imagem, video, PDF, links externos ou embeds. Quando a trilha for paga, a cobranca acontece no cartao aula por aula, no momento da conclusao.
           </p>
           {currentUser?.role === "admin" ? (
             <div className="mt-6 rounded-3xl border border-mango/30 bg-mango/[0.08] p-5">
@@ -641,6 +744,9 @@ function LessonsPage({
           const unlocked =
             currentUser?.role === "admin" || (availableLessons >= lesson.release_week && lesson.order_index <= completedCount + 1)
           const canComplete = currentUser?.role !== "admin" && unlocked && !completed
+          const lessonPrice = Number(lesson.price ?? 0)
+          const paymentRecord = payments.find((item) => item.lesson_id === lesson.id && item.status === "paid")
+          const isProcessing = processingLessonId === lesson.id
 
           return (
             <article key={lesson.id} className="glass-panel overflow-hidden p-6">
@@ -652,6 +758,9 @@ function LessonsPage({
                     </span>
                     <span className="rounded-full bg-surf/[0.15] px-3 py-1 text-xs uppercase tracking-[0.25em] text-surf">
                       {lesson.type} - {lesson.duration_minutes} min
+                    </span>
+                    <span className="rounded-full bg-mango/[0.15] px-3 py-1 text-xs uppercase tracking-[0.25em] text-mango">
+                      {lessonPrice > 0 ? `${formatCurrency(lessonPrice)} no cartao` : "sem cobranca"}
                     </span>
                     <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs uppercase tracking-[0.25em] text-slate-300">
                       {lesson.cards?.length ?? 0} cards
@@ -674,10 +783,26 @@ function LessonsPage({
                   >
                     {completed ? "concluida" : unlocked ? "disponivel" : "bloqueada"}
                   </span>
+                  {paymentRecord ? (
+                    <span className="rounded-full bg-emerald-500/[0.15] px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-100">
+                      pago no {paymentRecord.card_brand || "cartao"} final {paymentRecord.card_last_four || "****"}
+                    </span>
+                  ) : null}
                   {canComplete ? (
-                    <button className="soft-button-primary" onClick={() => onCompleteLesson(Number(selectedCourseId), lesson.id)} type="button">
-                      Marcar como concluida
+                    <button className="soft-button-primary" disabled={isProcessing} onClick={() => handleLessonAction(lesson, paymentRecord)} type="button">
+                      {isProcessing
+                        ? "Processando..."
+                        : lessonPrice > 0 && !paymentRecord
+                          ? `Pagar ${formatCurrency(lessonPrice)} e concluir`
+                          : "Marcar como concluida"}
                     </button>
+                  ) : null}
+                  {lessonPrice > 0 && !completed ? (
+                    <p className="text-right text-xs leading-5 text-slate-300">
+                      {paymentRecord
+                        ? "Pagamento desta aula ja aprovado. Agora basta concluir o conteudo."
+                        : "Esta aula gera cobranca unica no cartao quando for concluida."}
+                    </p>
                   ) : null}
                   {!unlocked && currentUser?.role !== "admin" ? (
                     <p className="text-right text-xs leading-5 text-slate-400">
@@ -713,6 +838,78 @@ function LessonsPage({
           )
         })}
       </div>
+
+      {paymentModalLesson ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 px-4 py-8 backdrop-blur-sm">
+          <form className="glass-panel w-full max-w-2xl space-y-5 p-6" onSubmit={handlePaymentSubmit}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.35em] text-mango">cartao de credito</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Concluir aula com cobranca</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  {paymentModalLesson.title} sera cobrada por {formatCurrency(paymentModalLesson.price)} no cartao de credito.
+                </p>
+              </div>
+              <button className="soft-button-muted" onClick={closePaymentModal} type="button">
+                Fechar
+              </button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <FieldInput
+                label="Nome no cartao"
+                onChange={(value) => setPaymentForm((prev) => ({ ...prev, card_holder_name: value }))}
+                required
+                value={paymentForm.card_holder_name}
+              />
+              <FieldInput
+                label="Numero do cartao"
+                inputMode="numeric"
+                onChange={(value) => setPaymentForm((prev) => ({ ...prev, card_number: value }))}
+                required
+                value={paymentForm.card_number}
+              />
+              <FieldInput
+                label="Mes de validade"
+                max={12}
+                min={1}
+                onChange={(value) => setPaymentForm((prev) => ({ ...prev, expiry_month: value }))}
+                required
+                type="number"
+                value={paymentForm.expiry_month}
+              />
+              <FieldInput
+                label="Ano de validade"
+                min={new Date().getFullYear()}
+                onChange={(value) => setPaymentForm((prev) => ({ ...prev, expiry_year: value }))}
+                required
+                type="number"
+                value={paymentForm.expiry_year}
+              />
+              <FieldInput
+                label="CVV"
+                inputMode="numeric"
+                maxLength={4}
+                onChange={(value) => setPaymentForm((prev) => ({ ...prev, cvv: value }))}
+                required
+                value={paymentForm.cvv}
+              />
+              <div className="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm text-slate-200">
+                <p className="font-medium text-white">Bandeira identificada</p>
+                <p className="mt-1 text-slate-300">{paymentBrand}</p>
+                <p className="mt-3 font-medium text-white">Valor desta aula</p>
+                <p className="mt-1 text-mango">{formatCurrency(paymentModalLesson.price)}</p>
+              </div>
+            </div>
+
+            <button className="soft-button-primary w-full" disabled={processingLessonId === paymentModalLesson.id} type="submit">
+              {processingLessonId === paymentModalLesson.id
+                ? "Autorizando cartao e concluindo..."
+                : `Pagar ${formatCurrency(paymentModalLesson.price)} e concluir aula`}
+            </button>
+          </form>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -747,14 +944,24 @@ function AdminStudioPage({
     description: "",
     type: "video",
     order_index: "",
+    price: 0,
     cards: [createEmptyLessonCard()],
   })
 
-  useEffect(() => {
-    setLessonForm((prev) => ({ ...prev, course_id: selectedCourseId ?? "" }))
-  }, [selectedCourseId])
-
   const selectedCourse = courses.find((course) => String(course.id) === String(selectedCourseId))
+
+  useEffect(() => {
+    setLessonForm((prev) => ({
+      ...prev,
+      course_id: selectedCourseId ?? "",
+      price:
+        String(prev.course_id) === String(selectedCourseId)
+          ? prev.price
+          : selectedCourse?.is_paid
+            ? Number(selectedCourse.price ?? 0)
+            : 0,
+    }))
+  }, [selectedCourse, selectedCourseId])
 
   function updateLessonCard(cardIndex, patch) {
     setLessonForm((prev) => ({
@@ -830,6 +1037,7 @@ function AdminStudioPage({
         description: lessonForm.description.trim(),
         type: lessonForm.type,
         order_index: lessonForm.order_index ? Number(lessonForm.order_index) : undefined,
+        price: Number(lessonForm.price),
         content: firstTextCard?.body,
         cards: normalizedCards,
       })
@@ -839,6 +1047,7 @@ function AdminStudioPage({
         title: "",
         description: "",
         order_index: "",
+        price: selectedCourse?.is_paid ? Number(selectedCourse.price ?? 0) : 0,
         cards: [createEmptyLessonCard()],
       }))
     } catch (error) {
@@ -859,7 +1068,7 @@ function AdminStudioPage({
             Cadastre cursos e monte aulas em cards sem misturar operacao com experiencia do aluno.
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
-            O painel administrativo agora foi concentrado aqui. Voce escolhe a turma, define a janela do curso e monta cada aula em blocos independentes de texto, imagem, video, PDF, link ou embed.
+            O painel administrativo agora foi concentrado aqui. Voce escolhe a turma, define a janela do curso, informa o valor base por aula e monta cada aula com sua propria cobranca quando necessario.
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
             <MiniPill title="Cursos isolados" text="Cadastro completo de turma, vagas, valor e periodo." />
@@ -930,7 +1139,7 @@ function AdminStudioPage({
             <div className="lg:col-span-2">
               <h2 className="text-2xl font-semibold text-white">Cadastrar curso</h2>
               <p className="mt-1 text-sm text-slate-300">
-                Defina turma, datas, capacidade maxima de 200 alunos e politica de pagamento.
+                Defina turma, datas, capacidade maxima de 200 alunos e o valor base por aula para trilhas pagas.
               </p>
             </div>
             <FieldInput
@@ -984,7 +1193,7 @@ function AdminStudioPage({
             </div>
             <div className="grid gap-4 sm:grid-cols-[1fr,auto] lg:col-span-2">
               <FieldInput
-                label="Preco"
+                label="Valor base por aula"
                 min={0}
                 step="0.01"
                 type="number"
@@ -1036,7 +1245,7 @@ function AdminStudioPage({
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <h3 className="text-lg font-semibold text-white">{course.title}</h3>
                       <span className="rounded-full bg-mango/[0.15] px-3 py-1 text-xs uppercase tracking-[0.25em] text-mango">
-                        {course.is_paid ? formatCurrency(course.price) : "gratuito"}
+                        {course.is_paid ? `${formatCurrency(course.price)} por aula` : "gratuito"}
                       </span>
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-300">{course.description}</p>
@@ -1058,7 +1267,7 @@ function AdminStudioPage({
             <div>
               <h2 className="text-2xl font-semibold text-white">Criar aula em cards</h2>
               <p className="mt-1 text-sm text-slate-300">
-                Monte a aula como uma sequencia de blocos. Alguns provedores bloqueiam preview em iframe, mas o botao de abertura continua funcionando para o aluno.
+                Monte a aula como uma sequencia de blocos. Defina tambem se a conclusao da aula gera cobranca no cartao ou se ela sera gratuita.
               </p>
             </div>
 
@@ -1086,11 +1295,20 @@ function AdminStudioPage({
                 onChange={(value) => setLessonForm((prev) => ({ ...prev, title: value }))}
               />
               <FieldInput
-                label="Ordem (opcional)"
+                label="Ordem (1 a 40)"
+                max={40}
                 min={1}
                 type="number"
                 value={lessonForm.order_index}
                 onChange={(value) => setLessonForm((prev) => ({ ...prev, order_index: value }))}
+              />
+              <FieldInput
+                label="Preco da aula"
+                min={0}
+                step="0.01"
+                type="number"
+                value={lessonForm.price}
+                onChange={(value) => setLessonForm((prev) => ({ ...prev, price: Number(value) }))}
               />
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-200">Tipo</label>
@@ -1107,7 +1325,7 @@ function AdminStudioPage({
               <div className="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm text-slate-200">
                 <p className="font-medium text-white">Regra aplicada automaticamente</p>
                 <p className="mt-1 leading-6 text-slate-300">
-                  A release semanal segue a ordem da aula. Ao publicar a aula 3, ela sera liberada na semana 3.
+                  A release semanal segue a ordem da aula, dentro do limite de 40 aulas por curso. Se o preco for maior que zero, a cobranca acontece no cartao ao concluir esta etapa.
                 </p>
               </div>
               <div className="md:col-span-2">
@@ -1180,9 +1398,14 @@ function AdminStudioPage({
                           </p>
                           <h3 className="mt-2 text-lg font-semibold text-white">{lesson.title}</h3>
                         </div>
-                        <span className="rounded-full bg-surf/[0.15] px-3 py-1 text-xs uppercase tracking-[0.25em] text-surf">
-                          {lesson.cards?.length ?? 0} cards
-                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full bg-mango/[0.15] px-3 py-1 text-xs uppercase tracking-[0.25em] text-mango">
+                            {Number(lesson.price ?? 0) > 0 ? `${formatCurrency(lesson.price)} no cartao` : "sem cobranca"}
+                          </span>
+                          <span className="rounded-full bg-surf/[0.15] px-3 py-1 text-xs uppercase tracking-[0.25em] text-surf">
+                            {lesson.cards?.length ?? 0} cards
+                          </span>
+                        </div>
                       </div>
                       <p className="mt-3 text-sm leading-6 text-slate-300">{lesson.description}</p>
                       <div className="mt-4 grid gap-3">
@@ -1366,7 +1589,108 @@ function LessonAssetPreview({ card, compact = false }) {
   return null
 }
 
-function ProgressPage({ progress }) {
+function ProgressPage({
+  adminCourseProgress,
+  adminProgressError,
+  adminProgressLoading,
+  courses,
+  currentUser,
+  onSelectCourse,
+  progress,
+  selectedCourseId,
+}) {
+  if (currentUser?.role === "admin") {
+    const selectedCourse = courses.find((course) => String(course.id) === String(selectedCourseId))
+    const averageProgress =
+      adminCourseProgress.length > 0
+        ? Math.round(adminCourseProgress.reduce((acc, item) => acc + item.percentage, 0) / adminCourseProgress.length)
+        : 0
+    const completedStudents = adminCourseProgress.filter((item) => item.percentage >= 100).length
+
+    return (
+      <div className="page-enter space-y-6">
+        <section className="grid gap-5 lg:grid-cols-[1.25fr,0.75fr]">
+          <div className="glass-panel p-6">
+            <h1 className="text-3xl font-semibold text-white">Progresso por aluno</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">
+              Escolha uma turma para acompanhar a barra de progresso individual, a proxima aula de cada aluno e o ritmo geral da trilha.
+            </p>
+          </div>
+          <div className="grid gap-4">
+            <StatCard label="Matriculados" value={adminCourseProgress.length} accent="from-surf to-cyan-400" />
+            <StatCard label="Media da turma" value={`${averageProgress}%`} accent="from-mango to-coral" />
+            <StatCard label="Concluiram tudo" value={completedStudents} accent="from-emerald-400 to-lime-300" />
+          </div>
+        </section>
+
+        <section className="glass-panel p-6">
+          <div className="grid gap-4 lg:grid-cols-[1fr,320px] lg:items-end">
+            <div>
+              <h2 className="text-2xl font-semibold text-white">Turma em foco</h2>
+              <p className="mt-1 text-sm text-slate-300">
+                {selectedCourse
+                  ? `Acompanhando ${selectedCourse.title} para enxergar a evolucao aluno por aluno.`
+                  : "Selecione um curso para liberar a leitura individual da turma."}
+              </p>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-200">Curso</label>
+              <select className="soft-input" onChange={(event) => onSelectCourse(event.target.value)} value={selectedCourseId ?? ""}>
+                <option value="">Selecione um curso</option>
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </section>
+
+        {adminProgressError ? (
+          <div className="rounded-2xl border border-coral/40 bg-coral/10 px-4 py-3 text-sm text-rose-100">{adminProgressError}</div>
+        ) : null}
+
+        {!selectedCourseId ? (
+          <EmptyState title="Selecione um curso" text="Assim que a turma for escolhida, as barras de progresso dos alunos aparecem aqui." />
+        ) : adminProgressLoading ? (
+          <div className="glass-panel flex min-h-[24vh] items-center justify-center p-10 text-slate-200">Carregando progresso da turma...</div>
+        ) : adminCourseProgress.length === 0 ? (
+          <EmptyState title="Nenhum aluno matriculado" text="Quando houver matriculas nesta turma, o progresso individual sera listado aqui." />
+        ) : (
+          <section className="grid gap-5 xl:grid-cols-2">
+            {adminCourseProgress.map((item) => (
+              <article key={item.enrollment_id} className="glass-panel p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      grupo {item.group_number} - {item.status}
+                    </p>
+                    <h2 className="mt-2 text-2xl font-semibold text-white">{item.student_name}</h2>
+                    <p className="mt-1 text-sm text-slate-300">{item.student_email || item.student_cpf}</p>
+                  </div>
+                  <span className="rounded-full bg-surf/[0.15] px-3 py-1 text-xs uppercase tracking-[0.25em] text-surf">
+                    {item.percentage}%
+                  </span>
+                </div>
+                <div className="mt-5">
+                  <ProgressMeter percentage={item.percentage} />
+                </div>
+                <dl className="mt-5 space-y-2 text-sm text-slate-200">
+                  <InfoRow label="Concluidas" value={`${item.completed_lessons}/${item.total_lessons}`} />
+                  <InfoRow label="Liberadas" value={item.available_lessons} />
+                  <InfoRow label="Proxima aula" value={item.next_lesson || "Curso finalizado"} />
+                  <InfoRow label="CPF" value={item.student_cpf} />
+                  <InfoRow label="Acesso ate" value={formatDate(item.access_expires_at)} />
+                </dl>
+              </article>
+            ))}
+          </section>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="page-enter space-y-6">
       <div className="glass-panel p-6">
@@ -1388,8 +1712,8 @@ function ProgressPage({ progress }) {
                   {item.percentage}%
                 </span>
               </div>
-              <div className="mt-5 h-3 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-gradient-to-r from-surf to-mango" style={{ width: `${item.percentage}%` }} />
+              <div className="mt-5">
+                <ProgressMeter percentage={item.percentage} />
               </div>
               <dl className="mt-5 space-y-2 text-sm text-slate-200">
                 <InfoRow label="Concluidas" value={`${item.completed_lessons}/${item.total_lessons}`} />
@@ -1557,6 +1881,9 @@ function AppShell() {
   const [payments, setPayments] = useState([])
   const [lessons, setLessons] = useState([])
   const [selectedCourseId, setSelectedCourseId] = useState("")
+  const [adminCourseProgress, setAdminCourseProgress] = useState([])
+  const [adminProgressLoading, setAdminProgressLoading] = useState(false)
+  const [adminProgressError, setAdminProgressError] = useState("")
   const [notice, setNotice] = useState(null)
 
   async function hydrateSession(activeToken) {
@@ -1601,6 +1928,9 @@ function AppShell() {
       setProgress([])
       setPayments([])
       setLessons([])
+      setAdminCourseProgress([])
+      setAdminProgressLoading(false)
+      setAdminProgressError("")
       setNotice({ type: "error", text: error.message })
       navigate("/login")
     } finally {
@@ -1630,6 +1960,45 @@ function AppShell() {
 
     loadLessons()
   }, [selectedCourseId, token])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadAdminCourseProgress() {
+      if (!token || currentUser?.role !== "admin" || !selectedCourseId) {
+        setAdminCourseProgress([])
+        setAdminProgressError("")
+        setAdminProgressLoading(false)
+        return
+      }
+
+      setAdminProgressLoading(true)
+      setAdminProgressError("")
+      try {
+        const data = await apiFetch(`/progress/course/${selectedCourseId}/students`, { token })
+        if (cancelled) return
+        startTransition(() => {
+          setAdminCourseProgress(data)
+          setAdminProgressError("")
+        })
+      } catch (error) {
+        if (cancelled) return
+        startTransition(() => {
+          setAdminCourseProgress([])
+          setAdminProgressError(error.message)
+        })
+      } finally {
+        if (!cancelled) {
+          setAdminProgressLoading(false)
+        }
+      }
+    }
+
+    loadAdminCourseProgress()
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser?.role, selectedCourseId, token])
 
   async function handleLogin(credentials) {
     setLoading(true)
@@ -1666,6 +2035,7 @@ function AppShell() {
       telegram: form.telegram,
       city: form.city,
       state: form.state,
+      education_level: form.education_level,
     }
 
     if (profile?.id) {
@@ -1682,23 +2052,6 @@ function AppShell() {
     }
 
     const cpf = profile?.cpf
-    if (course.is_paid) {
-      try {
-        await apiFetch("/payments", {
-          token,
-          method: "POST",
-          body: {
-            user_id: String(currentUser.id),
-            course_id: course.id,
-            amount: Number(course.price),
-            provider: "frontend",
-          },
-        })
-      } catch (error) {
-        if (error.status !== 409) throw error
-      }
-    }
-
     await apiFetch("/enrollments", {
       token,
       method: "POST",
@@ -1736,7 +2089,7 @@ function AppShell() {
     return createdLesson
   }
 
-  async function handleCompleteLesson(courseId, lessonId) {
+  async function handleCompleteLesson(courseId, lessonId, extraPayload) {
     await apiFetch("/progress", {
       token,
       method: "POST",
@@ -1744,12 +2097,13 @@ function AppShell() {
         user_id: String(currentUser.id),
         course_id: courseId,
         lesson_id: lessonId,
+        ...(extraPayload ?? {}),
       },
     })
     await refreshSession()
     const data = await apiFetch(`/lessons/course/${courseId}`, { token })
     setLessons(data)
-    setNotice({ type: "success", text: "Progresso atualizado." })
+    setNotice({ type: "success", text: extraPayload?.payment ? "Pagamento aprovado e progresso atualizado." : "Progresso atualizado." })
   }
 
   function handleLogout() {
@@ -1762,6 +2116,9 @@ function AppShell() {
     setProgress([])
     setPayments([])
     setLessons([])
+    setAdminCourseProgress([])
+    setAdminProgressLoading(false)
+    setAdminProgressError("")
     setNotice(null)
     navigate("/login")
   }
@@ -1792,7 +2149,7 @@ function AppShell() {
           ["/dashboard", "Visao geral"],
           ["/courses", "Cursos"],
           ["/lessons", "Aulas"],
-          ["/progress", "Progresso"],
+          ["/progress", "Progresso da turma"],
         ]
       : [
           ["/dashboard", "Dashboard"],
@@ -1861,7 +2218,6 @@ function AppShell() {
                     enrollments={enrollments}
                     notice={notice}
                     onEnroll={handleEnroll}
-                    payments={payments}
                     profile={profile}
                   />
                 }
@@ -1876,7 +2232,9 @@ function AppShell() {
                     lessons={lessons}
                     notice={notice}
                     onCompleteLesson={handleCompleteLesson}
+                    onNotice={setNotice}
                     onSelectCourse={setSelectedCourseId}
+                    payments={payments}
                     progress={progress}
                     selectedCourseId={selectedCourseId}
                   />
@@ -1902,7 +2260,21 @@ function AppShell() {
                 }
                 path="/admin"
               />
-              <Route element={<ProgressPage progress={progress} />} path="/progress" />
+              <Route
+                element={
+                  <ProgressPage
+                    adminCourseProgress={adminCourseProgress}
+                    adminProgressError={adminProgressError}
+                    adminProgressLoading={adminProgressLoading}
+                    courses={courses}
+                    currentUser={currentUser}
+                    onSelectCourse={setSelectedCourseId}
+                    progress={progress}
+                    selectedCourseId={selectedCourseId}
+                  />
+                }
+                path="/progress"
+              />
               <Route element={<Navigate replace to={getDefaultRoute(currentUser)} />} path="*" />
             </Routes>
           )}
@@ -1947,6 +2319,19 @@ function InfoRow({ label, value }) {
     <div className="flex items-center justify-between gap-4">
       <dt className="text-slate-400">{label}</dt>
       <dd className="text-right text-white">{value}</dd>
+    </div>
+  )
+}
+
+function ProgressMeter({ percentage }) {
+  const clampedPercentage = Math.max(0, Math.min(100, Number(percentage ?? 0)))
+
+  return (
+    <div className="h-3 overflow-hidden rounded-full bg-white/10">
+      <div
+        className="h-full rounded-full bg-gradient-to-r from-surf to-mango transition-[width] duration-500"
+        style={{ width: `${clampedPercentage}%` }}
+      />
     </div>
   )
 }

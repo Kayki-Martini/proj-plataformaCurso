@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Column, DateTime, Integer, String, create_engine, or_
+from sqlalchemy import Column, DateTime, Integer, String, create_engine, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
@@ -50,6 +50,7 @@ class Student(Base):
     telegram = Column(String(60), nullable=True)
     city = Column(String(100), nullable=False)
     state = Column(String(100), nullable=False)
+    education_level = Column(String(40), nullable=False, default="medio")
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -63,6 +64,7 @@ class StudentBase(BaseModel):
     telegram: str | None = Field(default=None, max_length=60)
     city: str = Field(min_length=2, max_length=100)
     state: str = Field(min_length=2, max_length=100)
+    education_level: str = Field(default="medio", min_length=2, max_length=40)
 
 
 class StudentUpdate(BaseModel):
@@ -73,6 +75,7 @@ class StudentUpdate(BaseModel):
     telegram: str | None = Field(default=None, max_length=60)
     city: str | None = Field(default=None, min_length=2, max_length=100)
     state: str | None = Field(default=None, min_length=2, max_length=100)
+    education_level: str | None = Field(default=None, min_length=2, max_length=40)
 
 
 class StudentResponse(BaseModel):
@@ -87,6 +90,7 @@ class StudentResponse(BaseModel):
     telegram: str | None
     city: str
     state: str
+    education_level: str
     created_at: datetime
     updated_at: datetime
 
@@ -114,9 +118,15 @@ def is_admin(user: dict) -> bool:
     return user.get("role") == "admin"
 
 
+def run_migrations():
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS education_level VARCHAR(40) NOT NULL DEFAULT 'medio';"))
+
+
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+    run_migrations()
     logger.info("user-service iniciado.")
 
 
@@ -180,6 +190,7 @@ def create_user(
         telegram=payload.telegram,
         city=payload.city.strip(),
         state=payload.state.strip(),
+        education_level=payload.education_level.strip().lower(),
     )
     db.add(student)
 
@@ -254,4 +265,3 @@ def delete_user(
     db.commit()
     logger.info("Aluno removido: %s", student.cpf)
     return None
-

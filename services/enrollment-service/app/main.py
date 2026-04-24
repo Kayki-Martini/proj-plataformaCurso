@@ -27,7 +27,6 @@ JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-jwt-key")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://localhost:8002")
 COURSE_SERVICE_URL = os.getenv("COURSE_SERVICE_URL", "http://localhost:8003")
-PAYMENT_SERVICE_URL = os.getenv("PAYMENT_SERVICE_URL", "http://localhost:8007")
 REQUEST_TIMEOUT = 8
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
@@ -186,14 +185,6 @@ def create_enrollment(
     if current_count >= int(course["capacity"]):
         raise HTTPException(status_code=400, detail="Turma lotada. Limite maximo atingido.")
 
-    if course["is_paid"]:
-        payments = fetch_service_json(f"{PAYMENT_SERVICE_URL}/payments/{student['auth_user_id']}", raw_token)
-        has_paid_payment = any(
-            payment["course_id"] == payload.course_id and payment["status"] == "paid" for payment in payments
-        )
-        if not has_paid_payment:
-            raise HTTPException(status_code=400, detail="Pagamento aprovado obrigatorio para cursos pagos.")
-
     now = datetime.utcnow()
     enrollment = Enrollment(
         user_id=student["auth_user_id"],
@@ -231,3 +222,20 @@ def list_enrollments_by_user(
     )
     return enrollments
 
+
+@app.get("/enrollments/course/{course_id}", response_model=list[EnrollmentResponse])
+def list_enrollments_by_course(
+    course_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Voce nao pode visualizar as matriculas desta turma.")
+
+    enrollments = (
+        db.query(Enrollment)
+        .filter(Enrollment.course_id == course_id)
+        .order_by(Enrollment.group_number.asc(), Enrollment.created_at.asc())
+        .all()
+    )
+    return enrollments

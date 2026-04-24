@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from datetime import datetime
+from decimal import Decimal
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +10,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint, create_engine, func, text
+from sqlalchemy import Column, DateTime, Integer, Numeric, String, Text, UniqueConstraint, create_engine, func, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 
@@ -38,10 +39,11 @@ app.add_middleware(
 )
 
 LESSON_TYPES = {
-    "video": 20,
-    "texto": 20,
+    "video": 30,
+    "texto": 30,
     "atividade": 60,
 }
+MAX_LESSONS_PER_COURSE = 40
 
 CARD_TYPES = {"texto", "imagem", "video", "pdf", "link", "embed"}
 
@@ -58,6 +60,7 @@ class Lesson(Base):
     order_index = Column(Integer, nullable=False)
     release_week = Column(Integer, nullable=False)
     duration_minutes = Column(Integer, nullable=False)
+    price = Column(Numeric(10, 2), nullable=False, default=0)
     content = Column(Text, nullable=True)
     cards_json = Column(Text, nullable=False, default="[]")
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -89,7 +92,8 @@ class LessonCreate(BaseModel):
     title: str = Field(min_length=3, max_length=150)
     description: str = Field(min_length=10)
     type: str = Field(pattern="^(video|texto|atividade)$")
-    order_index: int | None = Field(default=None, gt=0)
+    order_index: int | None = Field(default=None, gt=0, le=MAX_LESSONS_PER_COURSE)
+    price: Decimal = Field(default=Decimal("0.00"), ge=0)
     content: str | None = None
     cards: list[LessonCard] = Field(default_factory=list, min_length=1, max_length=20)
 
@@ -105,6 +109,7 @@ class LessonResponse(BaseModel):
     order_index: int
     release_week: int
     duration_minutes: int
+    price: Decimal
     content: str | None
     cards: list[LessonCard]
     created_at: datetime
@@ -156,6 +161,7 @@ def serialize_lesson(lesson: Lesson) -> LessonResponse:
         order_index=lesson.order_index,
         release_week=lesson.release_week,
         duration_minutes=lesson.duration_minutes,
+        price=lesson.price,
         content=fallback_content,
         cards=cards,
         created_at=lesson.created_at,
@@ -181,6 +187,7 @@ def ensure_admin(current_user: dict):
 def run_migrations():
     with engine.begin() as connection:
         connection.execute(text("ALTER TABLE lessons ADD COLUMN IF NOT EXISTS cards_json TEXT NOT NULL DEFAULT '[]';"))
+        connection.execute(text("ALTER TABLE lessons ADD COLUMN IF NOT EXISTS price NUMERIC(10, 2) NOT NULL DEFAULT 0;"))
 
 
 def migrate_legacy_content(db: Session):
@@ -269,6 +276,8 @@ def create_lesson(
 
     next_order = (db.query(func.max(Lesson.order_index)).filter(Lesson.course_id == payload.course_id).scalar() or 0) + 1
     order_index = payload.order_index or next_order
+    if order_index > MAX_LESSONS_PER_COURSE:
+        raise HTTPException(status_code=400, detail="Cada curso pode ter no maximo 40 aulas.")
 
     conflict = (
         db.query(Lesson)
@@ -291,6 +300,7 @@ def create_lesson(
         order_index=order_index,
         release_week=order_index,
         duration_minutes=LESSON_TYPES[payload.type],
+        price=payload.price,
         content=fallback_content,
         cards_json=json.dumps(cards_payload, ensure_ascii=False),
     )

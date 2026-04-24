@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS lessons (
     order_index INTEGER NOT NULL,
     release_week INTEGER NOT NULL,
     duration_minutes INTEGER NOT NULL,
+    price NUMERIC(10, 2) NOT NULL DEFAULT 0,
     content TEXT,
     cards_json TEXT NOT NULL DEFAULT '[]',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

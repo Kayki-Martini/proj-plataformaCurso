@@ -8,10 +8,10 @@ CREATE TABLE IF NOT EXISTS students (
     telegram VARCHAR(60),
     city VARCHAR(100) NOT NULL,
     state VARCHAR(100) NOT NULL,
+    education_level VARCHAR(40) NOT NULL DEFAULT 'medio',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_students_auth_user_id ON students(auth_user_id);
 CREATE INDEX IF NOT EXISTS idx_students_cpf ON students(cpf);
-

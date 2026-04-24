@@ -2,6 +2,7 @@ import logging
 import os
 from datetime import datetime
 from decimal import Decimal
+import re
 
 import requests
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -10,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Column, DateTime, Integer, Numeric, String, create_engine
+from sqlalchemy import Column, DateTime, Integer, Numeric, String, create_engine, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 
@@ -24,6 +25,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://payment_user:payment_pass
 JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-jwt-key")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 COURSE_SERVICE_URL = os.getenv("COURSE_SERVICE_URL", "http://localhost:8003")
+LESSON_SERVICE_URL = os.getenv("LESSON_SERVICE_URL", "http://localhost:8005")
+ENROLLMENT_SERVICE_URL = os.getenv("ENROLLMENT_SERVICE_URL", "http://localhost:8004")
 REQUEST_TIMEOUT = 8
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
@@ -47,11 +50,16 @@ class Payment(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String(50), nullable=False, index=True)
     course_id = Column(Integer, nullable=False, index=True)
+    lesson_id = Column(Integer, nullable=True, index=True)
     course_title = Column(String(150), nullable=False)
+    lesson_title = Column(String(150), nullable=True)
     amount = Column(Numeric(10, 2), nullable=False, default=0)
     currency = Column(String(10), nullable=False, default="BRL")
     status = Column(String(20), nullable=False, default="paid")
-    provider = Column(String(50), nullable=False, default="manual")
+    provider = Column(String(50), nullable=False, default="credit_card")
+    card_holder_name = Column(String(150), nullable=True)
+    card_brand = Column(String(30), nullable=True)
+    card_last_four = Column(String(4), nullable=True)
     external_reference = Column(String(100), nullable=True)
     paid_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -60,9 +68,15 @@ class Payment(Base):
 class PaymentCreate(BaseModel):
     user_id: str = Field(min_length=1, max_length=50)
     course_id: int = Field(gt=0)
+    lesson_id: int = Field(gt=0)
     amount: Decimal = Field(default=Decimal("0.00"), ge=0)
     currency: str = Field(default="BRL", min_length=3, max_length=10)
-    provider: str = Field(default="manual", min_length=3, max_length=50)
+    provider: str = Field(default="credit_card", pattern="^credit_card$")
+    card_holder_name: str = Field(min_length=3, max_length=150)
+    card_number: str = Field(min_length=13, max_length=19)
+    expiry_month: int = Field(ge=1, le=12)
+    expiry_year: int = Field(ge=2000, le=2100)
+    cvv: str = Field(min_length=3, max_length=4)
     external_reference: str | None = Field(default=None, max_length=100)
 
 
@@ -72,11 +86,16 @@ class PaymentResponse(BaseModel):
     id: int
     user_id: str
     course_id: int
+    lesson_id: int | None
     course_title: str
+    lesson_title: str | None
     amount: Decimal
     currency: str
     status: str
     provider: str
+    card_holder_name: str | None
+    card_brand: str | None
+    card_last_four: str | None
     external_reference: str | None
     paid_at: datetime
     created_at: datetime
@@ -121,9 +140,63 @@ def fetch_service_json(url: str, token: str):
     return response.json()
 
 
+def normalize_digits(value: str) -> str:
+    return re.sub(r"\D", "", value or "")
+
+
+def infer_card_brand(card_number: str) -> str:
+    if card_number.startswith("4"):
+        return "visa"
+    if re.match(r"^5[1-5]", card_number) or re.match(r"^2(2[2-9]|[3-6]\d|7[01])", card_number):
+        return "mastercard"
+    if re.match(r"^3[47]", card_number):
+        return "amex"
+    if re.match(r"^6(?:011|5)", card_number):
+        return "discover"
+    if re.match(r"^35", card_number):
+        return "jcb"
+    return "credit_card"
+
+
+def normalize_amount(value: Decimal) -> Decimal:
+    return Decimal(str(value)).quantize(Decimal("0.01"))
+
+
+def current_release_week(enrolled_at: datetime) -> int:
+    days_elapsed = max(0, (datetime.utcnow().date() - enrolled_at.date()).days)
+    return (days_elapsed // 7) + 1
+
+
+def validate_card_payload(payload: PaymentCreate) -> tuple[str, str]:
+    card_number = normalize_digits(payload.card_number)
+    cvv = normalize_digits(payload.cvv)
+    if len(card_number) < 13 or len(card_number) > 19:
+        raise HTTPException(status_code=400, detail="Numero do cartao invalido.")
+    if len(cvv) not in {3, 4}:
+        raise HTTPException(status_code=400, detail="CVV invalido.")
+
+    now = datetime.utcnow()
+    if payload.expiry_year < now.year or (payload.expiry_year == now.year and payload.expiry_month < now.month):
+        raise HTTPException(status_code=400, detail="Cartao expirado.")
+
+    return infer_card_brand(card_number), card_number[-4:]
+
+
+def run_migrations():
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS lesson_id INTEGER;"))
+        connection.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS lesson_title VARCHAR(150);"))
+        connection.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS card_holder_name VARCHAR(150);"))
+        connection.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS card_brand VARCHAR(30);"))
+        connection.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS card_last_four VARCHAR(4);"))
+        connection.execute(text("ALTER TABLE payments ALTER COLUMN provider SET DEFAULT 'credit_card';"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS idx_payments_lesson ON payments(lesson_id);"))
+
+
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+    run_migrations()
     logger.info("payment-service iniciado.")
 
 
@@ -150,29 +223,54 @@ def create_payment(
 
     existing = (
         db.query(Payment)
-        .filter(Payment.user_id == payload.user_id, Payment.course_id == payload.course_id, Payment.status == "paid")
+        .filter(Payment.user_id == payload.user_id, Payment.lesson_id == payload.lesson_id, Payment.status == "paid")
         .first()
     )
     if existing:
-        raise HTTPException(status_code=409, detail="Ja existe pagamento aprovado para este curso.")
+        raise HTTPException(status_code=409, detail="Ja existe pagamento aprovado para esta aula.")
 
+    lesson = fetch_service_json(f"{LESSON_SERVICE_URL}/lessons/{payload.lesson_id}", raw_token)
     course = fetch_service_json(f"{COURSE_SERVICE_URL}/courses/{payload.course_id}", raw_token)
-    course_price = Decimal(str(course["price"]))
-    amount = Decimal("0.00")
+    if lesson["course_id"] != payload.course_id:
+        raise HTTPException(status_code=400, detail="A aula informada nao pertence ao curso selecionado.")
 
-    if course["is_paid"]:
-        if payload.amount < course_price:
-            raise HTTPException(status_code=400, detail=f"Valor minimo para pagamento: {course_price}.")
-        amount = payload.amount
+    lesson_price = normalize_amount(Decimal(str(lesson["price"])))
+    if lesson_price <= Decimal("0.00"):
+        raise HTTPException(status_code=400, detail="Aula gratuita nao requer pagamento.")
+
+    enrollments = fetch_service_json(f"{ENROLLMENT_SERVICE_URL}/enrollments/user/{payload.user_id}", raw_token)
+    enrollment = next((item for item in enrollments if item["course_id"] == payload.course_id), None)
+    if not enrollment:
+        raise HTTPException(status_code=404, detail="Matricula nao encontrada para este curso.")
+
+    access_expires_at = datetime.fromisoformat(enrollment["access_expires_at"])
+    if datetime.utcnow() > access_expires_at:
+        raise HTTPException(status_code=403, detail="Periodo de acesso encerrado para esta matricula.")
+
+    enrolled_at = datetime.fromisoformat(enrollment["enrolled_at"])
+    if int(lesson["release_week"]) > current_release_week(enrolled_at):
+        raise HTTPException(status_code=400, detail="Esta aula ainda nao foi liberada para pagamento.")
+
+    amount = normalize_amount(payload.amount)
+    if amount != lesson_price:
+        raise HTTPException(status_code=400, detail=f"Valor da aula deve ser exatamente {lesson_price}.")
+
+    card_brand, card_last_four = validate_card_payload(payload)
+    external_reference = payload.external_reference or f"cc-{payload.user_id}-{payload.lesson_id}-{int(datetime.utcnow().timestamp())}"
     payment = Payment(
         user_id=payload.user_id,
         course_id=payload.course_id,
+        lesson_id=payload.lesson_id,
         course_title=course["title"],
-        amount=amount,
+        lesson_title=lesson["title"],
+        amount=lesson_price,
         currency=payload.currency.upper(),
         status="paid",
         provider=payload.provider,
-        external_reference=payload.external_reference,
+        card_holder_name=payload.card_holder_name.strip(),
+        card_brand=card_brand,
+        card_last_four=card_last_four,
+        external_reference=external_reference,
         paid_at=datetime.utcnow(),
     )
     db.add(payment)
@@ -193,4 +291,3 @@ def list_payments(
 
     payments = db.query(Payment).filter(Payment.user_id == user_id).order_by(Payment.created_at.desc()).all()
     return payments
-
