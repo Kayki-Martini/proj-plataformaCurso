@@ -27,6 +27,7 @@ JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 COURSE_SERVICE_URL = os.getenv("COURSE_SERVICE_URL", "http://localhost:8003")
 LESSON_SERVICE_URL = os.getenv("LESSON_SERVICE_URL", "http://localhost:8005")
 ENROLLMENT_SERVICE_URL = os.getenv("ENROLLMENT_SERVICE_URL", "http://localhost:8004")
+USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://localhost:8002")
 REQUEST_TIMEOUT = 8
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
@@ -138,6 +139,19 @@ def fetch_service_json(url: str, token: str):
         detail = response.json().get("detail", "Erro em servico dependente.") if response.headers.get("content-type", "").startswith("application/json") else response.text
         raise HTTPException(status_code=502, detail=detail)
     return response.json()
+
+
+def touch_user_retention(user_id: str, token: str, reason: str) -> None:
+    try:
+        response = requests.post(
+            f"{USER_SERVICE_URL}/users/retention/touch",
+            json={"auth_user_id": user_id, "reason": reason},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        logger.warning("Nao foi possivel atualizar a persistencia do aluno %s: %s", user_id, exc)
 
 
 def normalize_digits(value: str) -> str:
@@ -276,6 +290,7 @@ def create_payment(
     db.add(payment)
     db.commit()
     db.refresh(payment)
+    touch_user_retention(payment.user_id, raw_token, f"pagamento_aula_{payment.lesson_id}")
     logger.info("Pagamento registrado: user=%s curso=%s", payment.user_id, payment.course_id)
     return payment
 

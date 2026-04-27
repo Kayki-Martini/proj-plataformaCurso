@@ -154,6 +154,19 @@ def post_service_json(url: str, token: str, payload: dict):
     return response.json()
 
 
+def touch_user_retention(user_id: str, token: str, reason: str) -> None:
+    try:
+        response = requests.post(
+            f"{USER_SERVICE_URL}/users/retention/touch",
+            json={"auth_user_id": user_id, "reason": reason},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        logger.warning("Nao foi possivel atualizar a persistencia do aluno %s: %s", user_id, exc)
+
+
 def current_release_week(enrolled_at: datetime) -> int:
     days_elapsed = max(0, (date.today() - enrolled_at.date()).days)
     return (days_elapsed // 7) + 1
@@ -276,6 +289,7 @@ def mark_progress(
     db.add(entry)
     db.commit()
     db.refresh(entry)
+    touch_user_retention(entry.user_id, raw_token, f"conclusao_aula_{entry.lesson_id}")
     logger.info("Progresso registrado: user=%s lesson=%s", entry.user_id, entry.lesson_id)
     return entry
 

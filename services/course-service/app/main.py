@@ -3,13 +3,13 @@ import os
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import Boolean, Column, Date, DateTime, Integer, Numeric, String, Text, create_engine
+from sqlalchemy import Boolean, Column, Date, DateTime, Integer, Numeric, String, Text, create_engine, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 
@@ -52,6 +52,7 @@ class Course(Base):
     price = Column(Numeric(10, 2), nullable=False, default=0)
     is_paid = Column(Boolean, nullable=False, default=False)
     is_active = Column(Boolean, nullable=False, default=True)
+    deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -104,8 +105,10 @@ class CourseResponse(BaseModel):
     price: Decimal
     is_paid: bool
     is_active: bool
+    is_deleted: bool
     enrollment_window_open: date
     enrollment_window_close: date
+    deleted_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -149,16 +152,31 @@ def serialize_course(course: Course) -> CourseResponse:
         price=course.price,
         is_paid=course.is_paid,
         is_active=course.is_active,
+        is_deleted=course.deleted_at is not None,
         enrollment_window_open=enrollment_window_open,
         enrollment_window_close=enrollment_window_close,
+        deleted_at=course.deleted_at,
         created_at=course.created_at,
         updated_at=course.updated_at,
     )
 
 
+def run_migrations():
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE courses ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;"))
+
+
+def get_course_or_404(db: Session, course_id: int) -> Course:
+    course = db.get(Course, course_id)
+    if not course:
+        raise HTTPException(status_code=404, detail="Curso nao encontrado.")
+    return course
+
+
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+    run_migrations()
     logger.info("course-service iniciado.")
 
 
@@ -175,11 +193,15 @@ def health():
 
 @app.get("/courses", response_model=list[CourseResponse])
 def list_courses(
+    include_deleted: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _ = current_user
-    courses = db.query(Course).order_by(Course.start_date.asc()).all()
+    courses_query = db.query(Course)
+    if not (include_deleted and current_user.get("role") == "admin"):
+        courses_query = courses_query.filter(Course.deleted_at.is_(None))
+
+    courses = courses_query.order_by(Course.start_date.asc()).all()
     return [serialize_course(course) for course in courses]
 
 
@@ -190,9 +212,7 @@ def get_course(
     db: Session = Depends(get_db),
 ):
     _ = current_user
-    course = db.get(Course, course_id)
-    if not course:
-        raise HTTPException(status_code=404, detail="Curso nao encontrado.")
+    course = get_course_or_404(db, course_id)
     return serialize_course(course)
 
 
@@ -217,6 +237,7 @@ def create_course(
         price=price,
         is_paid=is_paid,
         is_active=payload.is_active,
+        deleted_at=None,
     )
     db.add(course)
     db.commit()
@@ -233,9 +254,9 @@ def update_course(
     db: Session = Depends(get_db),
 ):
     ensure_admin(current_user)
-    course = db.get(Course, course_id)
-    if not course:
-        raise HTTPException(status_code=404, detail="Curso nao encontrado.")
+    course = get_course_or_404(db, course_id)
+    if course.deleted_at:
+        raise HTTPException(status_code=404, detail="Curso removido do catalogo.")
 
     updates = payload.model_dump(exclude_unset=True)
     for key, value in updates.items():
@@ -259,3 +280,20 @@ def update_course(
     logger.info("Curso atualizado: %s", course.title)
     return serialize_course(course)
 
+
+@app.delete("/courses/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_course(
+    course_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_admin(current_user)
+    course = get_course_or_404(db, course_id)
+
+    if course.deleted_at is None:
+        course.deleted_at = datetime.utcnow()
+        course.is_active = False
+        db.commit()
+        logger.info("Curso removido do catalogo: %s", course.title)
+
+    return None

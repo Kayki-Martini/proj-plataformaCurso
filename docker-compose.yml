@@ -146,7 +146,12 @@ services:
       DATABASE_URL: postgresql://lesson_user:lesson_pass@lesson-db:5432/lesson_db
       JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      PUBLIC_ASSET_BASE_URL: ${PUBLIC_ASSET_BASE_URL:-http://localhost:8080}
+      UPLOAD_DIR: /app/uploads
+      MAX_ASSET_SIZE_MB: ${MAX_ASSET_SIZE_MB:-100}
       SERVICE_PORT: 8000
+    volumes:
+      - lesson-assets-data:/app/uploads
     depends_on:
       - lesson-db
     ports:
@@ -185,6 +190,7 @@ services:
       COURSE_SERVICE_URL: http://course-service:8000
       LESSON_SERVICE_URL: http://lesson-service:8000
       ENROLLMENT_SERVICE_URL: http://enrollment-service:8000
+      USER_SERVICE_URL: http://user-service:8000
       SERVICE_PORT: 8000
     depends_on:
       - payment-db
@@ -227,5 +233,6 @@ volumes:
   course-db-data:
   enrollment-db-data:
   lesson-db-data:
+  lesson-assets-data:
   progress-db-data:
   payment-db-data:

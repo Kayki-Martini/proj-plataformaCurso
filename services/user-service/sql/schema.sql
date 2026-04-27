@@ -9,6 +9,10 @@ CREATE TABLE IF NOT EXISTS students (
     city VARCHAR(100) NOT NULL,
     state VARCHAR(100) NOT NULL,
     education_level VARCHAR(40) NOT NULL DEFAULT 'medio',
+    last_activity_at TIMESTAMP,
+    last_activity_source VARCHAR(80),
+    persistence_expires_at TIMESTAMP,
+    persistence_status VARCHAR(20) NOT NULL DEFAULT 'active',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

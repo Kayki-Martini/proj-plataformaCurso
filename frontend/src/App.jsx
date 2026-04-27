@@ -13,17 +13,17 @@ const LESSON_CARD_TYPES = [
   {
     value: "imagem",
     label: "Imagem",
-    hint: "Cole a URL de uma imagem publica para montar galerias, infograficos ou capas.",
+    hint: "Envie uma imagem do seu computador ou use uma URL publica para montar galerias, infograficos ou capas.",
   },
   {
     value: "video",
     label: "Video",
-    hint: "Aceita link direto de arquivo ou URL de YouTube/Vimeo para embed.",
+    hint: "Envie um video em arquivo ou use um link direto/URL de YouTube ou Vimeo.",
   },
   {
     value: "pdf",
     label: "PDF",
-    hint: "Use um PDF publico para preview rapido e botao de abertura do material.",
+    hint: "Envie o PDF da aula ou mantenha uma URL publica para preview rapido do material.",
   },
   {
     value: "link",
@@ -45,7 +45,42 @@ function createEmptyLessonCard(index = 1) {
     body: "",
     asset_type: "texto",
     asset_url: "",
+    asset_name: "",
     button_label: "",
+  }
+}
+
+function createEmptyCourseForm() {
+  return {
+    title: "",
+    description: "",
+    category: "",
+    cohort_name: "",
+    start_date: "",
+    end_date: "",
+    capacity: 200,
+    price: 0,
+    is_paid: false,
+    is_active: true,
+  }
+}
+
+function toInputDate(value) {
+  return value ? String(value).slice(0, 10) : ""
+}
+
+function buildCourseFormFromCourse(course) {
+  return {
+    title: course?.title ?? "",
+    description: course?.description ?? "",
+    category: course?.category ?? "",
+    cohort_name: course?.cohort_name ?? "",
+    start_date: toInputDate(course?.start_date),
+    end_date: toInputDate(course?.end_date),
+    capacity: Number(course?.capacity ?? 200),
+    price: Number(course?.price ?? 0),
+    is_paid: Boolean(course?.is_paid),
+    is_active: course?.is_active ?? true,
   }
 }
 
@@ -138,15 +173,16 @@ function normalizeErrorDetail(detail) {
 }
 
 async function apiFetch(path, { token, method = "GET", body } = {}) {
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData
   let response
   try {
     response = await fetch(`${API_URL}${path}`, {
       method,
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(body && !isFormData ? { "Content-Type": "application/json" } : {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
     })
   } catch (error) {
     const message =
@@ -179,6 +215,11 @@ async function apiFetch(path, { token, method = "GET", body } = {}) {
 function formatDate(value) {
   if (!value) return "-"
   return new Date(value).toLocaleDateString("pt-BR")
+}
+
+function formatDateTime(value) {
+  if (!value) return "-"
+  return new Date(value).toLocaleString("pt-BR")
 }
 
 function formatCurrency(value) {
@@ -409,7 +450,46 @@ function DashboardPage({
           </button>
         </form>
 
-        <div className="glass-panel p-6">
+        <div className="space-y-5">
+          <div className="glass-panel p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-semibold text-white">Persistencia do cadastro</h2>
+                <p className="mt-1 text-sm text-slate-300">
+                  Seu perfil fica ativo por 6 meses apos a ultima atividade relevante na plataforma.
+                </p>
+              </div>
+              <span
+                className={`rounded-full px-3 py-1 text-xs uppercase tracking-[0.25em] ${
+                  profile?.persistence_status === "expired"
+                    ? "bg-coral/15 text-coral"
+                    : "bg-emerald-400/15 text-emerald-200"
+                }`}
+              >
+                {profile?.persistence_status === "expired" ? "expirado" : "ativo"}
+              </span>
+            </div>
+            {profile ? (
+              <dl className="mt-5 space-y-2 text-sm text-slate-200">
+                <InfoRow label="Politica" value={`${profile.persistence_policy_months ?? 6} meses apos a ultima atividade`} />
+                <InfoRow label="Mantido ate" value={formatDate(profile.persistence_expires_at)} />
+                <InfoRow
+                  label="Ultima atividade"
+                  value={
+                    profile.last_activity_at
+                      ? `${formatDateTime(profile.last_activity_at)} - ${profile.last_activity_source ?? "atividade"}`
+                      : "-"
+                  }
+                />
+              </dl>
+            ) : (
+              <p className="mt-5 text-sm leading-6 text-slate-300">
+                Assim que voce criar o perfil de aluno, a politica de persistencia passa a ser rastreada automaticamente.
+              </p>
+            )}
+          </div>
+
+          <div className="glass-panel p-6">
           <h2 className="text-2xl font-semibold text-white">Seus cursos</h2>
           <div className="mt-5 space-y-4">
             {enrollments.length === 0 ? (
@@ -438,6 +518,7 @@ function DashboardPage({
               })
             )}
           </div>
+        </div>
         </div>
       </section>
     </div>
@@ -920,24 +1001,20 @@ function AdminStudioPage({
   notice,
   onCreateCourse,
   onCreateLesson,
+  onDeleteCourse,
   onNotice,
   onSelectCourse,
+  onUpdateCourse,
+  onUploadLessonAsset,
   selectedCourseId,
 }) {
   const [activeTab, setActiveTab] = useState("courses")
+  const [editingCourseId, setEditingCourseId] = useState(null)
   const [creatingCourse, setCreatingCourse] = useState(false)
   const [creatingLesson, setCreatingLesson] = useState(false)
-  const [courseForm, setCourseForm] = useState({
-    title: "",
-    description: "",
-    category: "",
-    cohort_name: "",
-    start_date: "",
-    end_date: "",
-    capacity: 200,
-    price: 0,
-    is_paid: false,
-  })
+  const [deletingCourseId, setDeletingCourseId] = useState("")
+  const [uploadingCardIndex, setUploadingCardIndex] = useState(null)
+  const [courseForm, setCourseForm] = useState(() => createEmptyCourseForm())
   const [lessonForm, setLessonForm] = useState({
     course_id: selectedCourseId ?? "",
     title: "",
@@ -963,6 +1040,25 @@ function AdminStudioPage({
     }))
   }, [selectedCourse, selectedCourseId])
 
+  useEffect(() => {
+    if (editingCourseId && !courses.some((course) => String(course.id) === String(editingCourseId))) {
+      setEditingCourseId(null)
+      setCourseForm(createEmptyCourseForm())
+    }
+  }, [courses, editingCourseId])
+
+  function resetCourseEditor() {
+    setEditingCourseId(null)
+    setCourseForm(createEmptyCourseForm())
+  }
+
+  function startEditingCourse(course) {
+    setEditingCourseId(String(course.id))
+    setCourseForm(buildCourseFormFromCourse(course))
+    setActiveTab("courses")
+    onSelectCourse(String(course.id))
+  }
+
   function updateLessonCard(cardIndex, patch) {
     setLessonForm((prev) => ({
       ...prev,
@@ -971,6 +1067,7 @@ function AdminStudioPage({
         const nextCard = { ...card, ...patch }
         if (patch.asset_type === "texto") {
           nextCard.asset_url = ""
+          nextCard.asset_name = ""
           nextCard.button_label = ""
         }
         return nextCard
@@ -996,25 +1093,59 @@ function AdminStudioPage({
     event.preventDefault()
     setCreatingCourse(true)
     try {
-      const createdCourse = await onCreateCourse(courseForm)
-      onNotice({ type: "success", text: "Curso cadastrado com sucesso no Studio Admin." })
-      setCourseForm({
-        title: "",
-        description: "",
-        category: "",
-        cohort_name: "",
-        start_date: "",
-        end_date: "",
-        capacity: 200,
-        price: 0,
-        is_paid: false,
-      })
-      setActiveTab("lessons")
-      onSelectCourse(String(createdCourse.id))
+      if (editingCourseId) {
+        const updatedCourse = await onUpdateCourse(editingCourseId, courseForm)
+        onNotice({ type: "success", text: "Curso atualizado com sucesso." })
+        setCourseForm(buildCourseFormFromCourse(updatedCourse))
+        onSelectCourse(String(updatedCourse.id))
+      } else {
+        const createdCourse = await onCreateCourse(courseForm)
+        onNotice({ type: "success", text: "Curso cadastrado com sucesso no Studio Admin." })
+        setCourseForm(createEmptyCourseForm())
+        setActiveTab("lessons")
+        onSelectCourse(String(createdCourse.id))
+      }
     } catch (error) {
       onNotice({ type: "error", text: error.message })
     } finally {
       setCreatingCourse(false)
+    }
+  }
+
+  async function handleDeleteCourse(course) {
+    const confirmDelete = window.confirm(`Deseja remover o curso "${course.title}" do catalogo?`)
+    if (!confirmDelete) return
+
+    setDeletingCourseId(String(course.id))
+    try {
+      await onDeleteCourse(course.id)
+      if (String(editingCourseId) === String(course.id)) {
+        resetCourseEditor()
+      }
+      onNotice({ type: "success", text: "Curso removido do catalogo com sucesso." })
+    } catch (error) {
+      onNotice({ type: "error", text: error.message })
+    } finally {
+      setDeletingCourseId("")
+    }
+  }
+
+  async function handleAssetUpload(cardIndex, file) {
+    if (!file) return
+
+    setUploadingCardIndex(cardIndex)
+    try {
+      const asset = await onUploadLessonAsset(file, lessonForm.cards[cardIndex]?.asset_type)
+      updateLessonCard(cardIndex, {
+        asset_type: asset.asset_type,
+        asset_url: asset.asset_url,
+        asset_name: asset.filename,
+      })
+      onNotice({ type: "success", text: `${asset.filename} enviado com sucesso.` })
+    } catch (error) {
+      onNotice({ type: "error", text: error.message })
+    } finally {
+      setUploadingCardIndex(null)
     }
   }
 
@@ -1065,14 +1196,14 @@ function AdminStudioPage({
             studio admin
           </div>
           <h1 className="max-w-3xl font-serif text-4xl text-white sm:text-5xl">
-            Cadastre cursos e monte aulas em cards sem misturar operacao com experiencia do aluno.
+            Cadastre cursos, ajuste o catalogo e monte aulas em cards sem misturar operacao com experiencia do aluno.
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
-            O painel administrativo agora foi concentrado aqui. Voce escolhe a turma, define a janela do curso, informa o valor base por aula e monta cada aula com sua propria cobranca quando necessario.
+            O painel administrativo agora concentra o CRUD completo de cursos, upload real de arquivos para as aulas e a montagem de trilhas em cards prontos para PDF, video, imagem, link ou embed.
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            <MiniPill title="Cursos isolados" text="Cadastro completo de turma, vagas, valor e periodo." />
-            <MiniPill title="Aulas modulares" text="Cada aula nasce com um conjunto proprio de cards." />
+            <MiniPill title="CRUD completo" text="Crie, edite ou remova cursos do catalogo sem perder historico." />
+            <MiniPill title="Upload real" text="PDF, imagem e video podem ser enviados direto para os cards." />
             <MiniPill title="Preview rapido" text="O que voce publica aqui aparece na trilha do aluno." />
           </div>
         </div>
@@ -1107,6 +1238,11 @@ function AdminStudioPage({
               {label}
             </button>
           ))}
+          {activeTab === "courses" ? (
+            <button className="soft-button-muted min-w-[140px]" onClick={resetCourseEditor} type="button">
+              Novo curso
+            </button>
+          ) : null}
         </div>
         <div className="w-full max-w-sm">
           <label className="mb-2 block text-sm font-medium text-slate-200">Curso em foco</label>
@@ -1136,11 +1272,20 @@ function AdminStudioPage({
       {activeTab === "courses" ? (
         <section className="grid gap-6 xl:grid-cols-[1.08fr,0.92fr]">
           <form className="glass-panel grid gap-4 p-6 lg:grid-cols-2" onSubmit={handleCourseSubmit}>
-            <div className="lg:col-span-2">
-              <h2 className="text-2xl font-semibold text-white">Cadastrar curso</h2>
-              <p className="mt-1 text-sm text-slate-300">
-                Defina turma, datas, capacidade maxima de 200 alunos e o valor base por aula para trilhas pagas.
-              </p>
+            <div className="flex items-start justify-between gap-4 lg:col-span-2">
+              <div>
+                <h2 className="text-2xl font-semibold text-white">
+                  {editingCourseId ? "Editar curso" : "Cadastrar curso"}
+                </h2>
+                <p className="mt-1 text-sm text-slate-300">
+                  Defina turma, datas, capacidade maxima de 200 alunos, disponibilidade e o valor base por aula para trilhas pagas.
+                </p>
+              </div>
+              {editingCourseId ? (
+                <button className="soft-button-muted" onClick={resetCourseEditor} type="button">
+                  Cancelar edicao
+                </button>
+              ) : null}
             </div>
             <FieldInput
               label="Titulo"
@@ -1191,7 +1336,7 @@ function AdminStudioPage({
                 onChange={(event) => setCourseForm((prev) => ({ ...prev, description: event.target.value }))}
               />
             </div>
-            <div className="grid gap-4 sm:grid-cols-[1fr,auto] lg:col-span-2">
+            <div className="grid gap-4 sm:grid-cols-[1fr,auto,auto] lg:col-span-2">
               <FieldInput
                 label="Valor base por aula"
                 min={0}
@@ -1209,10 +1354,25 @@ function AdminStudioPage({
                 />
                 Curso pago
               </label>
+              <label className="flex items-end gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-200">
+                <input
+                  checked={courseForm.is_active}
+                  className="mt-1 h-4 w-4 accent-emerald-400"
+                  onChange={(event) => setCourseForm((prev) => ({ ...prev, is_active: event.target.checked }))}
+                  type="checkbox"
+                />
+                Curso ativo
+              </label>
             </div>
             <div className="lg:col-span-2">
               <button className="soft-button-primary w-full" disabled={creatingCourse} type="submit">
-                {creatingCourse ? "Publicando curso..." : "Cadastrar curso"}
+                {creatingCourse
+                  ? editingCourseId
+                    ? "Salvando alteracoes..."
+                    : "Publicando curso..."
+                  : editingCourseId
+                    ? "Salvar alteracoes"
+                    : "Cadastrar curso"}
               </button>
             </div>
           </form>
@@ -1221,7 +1381,9 @@ function AdminStudioPage({
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-semibold text-white">Cursos cadastrados</h2>
-                <p className="mt-1 text-sm text-slate-300">Use esta lista para conferir turma, janela de matricula e valor publicado.</p>
+                <p className="mt-1 text-sm text-slate-300">
+                  Selecione um curso para focar nas aulas, editar o catalogo ou remover a turma publicada.
+                </p>
               </div>
               <span className="rounded-full bg-white/[0.08] px-3 py-1 text-xs uppercase tracking-[0.25em] text-slate-200">
                 {courses.length} cursos
@@ -1232,30 +1394,52 @@ function AdminStudioPage({
                 <EmptyState title="Nenhum curso cadastrado" text="Comece criando a primeira turma para destravar a aba de aulas." />
               ) : (
                 courses.map((course) => (
-                  <button
+                  <article
                     key={course.id}
-                    className={`w-full rounded-3xl border p-5 text-left transition ${
+                    className={`rounded-3xl border p-5 transition ${
                       String(course.id) === String(selectedCourseId)
                         ? "border-surf/50 bg-surf/[0.08]"
-                        : "border-white/10 bg-slate-950/35 hover:bg-white/[0.05]"
+                        : "border-white/10 bg-slate-950/35"
                     }`}
-                    onClick={() => onSelectCourse(String(course.id))}
-                    type="button"
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <h3 className="text-lg font-semibold text-white">{course.title}</h3>
-                      <span className="rounded-full bg-mango/[0.15] px-3 py-1 text-xs uppercase tracking-[0.25em] text-mango">
-                        {course.is_paid ? `${formatCurrency(course.price)} por aula` : "gratuito"}
-                      </span>
+                    <button className="w-full text-left" onClick={() => onSelectCourse(String(course.id))} type="button">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <h3 className="text-lg font-semibold text-white">{course.title}</h3>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full bg-mango/[0.15] px-3 py-1 text-xs uppercase tracking-[0.25em] text-mango">
+                            {course.is_paid ? `${formatCurrency(course.price)} por aula` : "gratuito"}
+                          </span>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs uppercase tracking-[0.25em] ${
+                              course.is_active ? "bg-emerald-400/15 text-emerald-200" : "bg-white/10 text-slate-300"
+                            }`}
+                          >
+                            {course.is_active ? "ativo" : "inativo"}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-300">{course.description}</p>
+                      <dl className="mt-4 space-y-2 text-sm text-slate-200">
+                        <InfoRow label="Turma" value={course.cohort_name} />
+                        <InfoRow label="Inicio" value={formatDate(course.start_date)} />
+                        <InfoRow label="Janela" value={`${formatDate(course.enrollment_window_open)} ate ${formatDate(course.enrollment_window_close)}`} />
+                        <InfoRow label="Capacidade" value={`${course.capacity} alunos`} />
+                      </dl>
+                    </button>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button className="soft-button-muted" onClick={() => startEditingCourse(course)} type="button">
+                        Editar
+                      </button>
+                      <button
+                        className="rounded-2xl border border-coral/30 bg-coral/10 px-4 py-3 text-sm font-semibold text-rose-100 transition hover:bg-coral/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={deletingCourseId === String(course.id)}
+                        onClick={() => handleDeleteCourse(course)}
+                        type="button"
+                      >
+                        {deletingCourseId === String(course.id) ? "Removendo..." : "Remover do catalogo"}
+                      </button>
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-slate-300">{course.description}</p>
-                    <dl className="mt-4 space-y-2 text-sm text-slate-200">
-                      <InfoRow label="Turma" value={course.cohort_name} />
-                      <InfoRow label="Inicio" value={formatDate(course.start_date)} />
-                      <InfoRow label="Janela" value={`${formatDate(course.enrollment_window_open)} ate ${formatDate(course.enrollment_window_close)}`} />
-                      <InfoRow label="Capacidade" value={`${course.capacity} alunos`} />
-                    </dl>
-                  </button>
+                  </article>
                 ))
               )}
             </div>
@@ -1343,7 +1527,9 @@ function AdminStudioPage({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 className="text-lg font-semibold text-white">Cards da aula</h3>
-                  <p className="mt-1 text-sm text-slate-300">Combine quantos blocos precisar para contar a historia da aula.</p>
+                  <p className="mt-1 text-sm text-slate-300">
+                    Combine quantos blocos precisar para contar a historia da aula. Cards de imagem, video e PDF aceitam upload real de arquivo.
+                  </p>
                 </div>
                 <button className="soft-button-muted" onClick={addLessonCard} type="button">
                   Adicionar card
@@ -1358,6 +1544,8 @@ function AdminStudioPage({
                     index={index}
                     onChange={updateLessonCard}
                     onRemove={removeLessonCard}
+                    onUploadAsset={handleAssetUpload}
+                    uploading={uploadingCardIndex === index}
                   />
                 ))}
               </div>
@@ -1435,7 +1623,15 @@ function AdminStudioPage({
   )
 }
 
-function LessonCardEditor({ card, canRemove, index, onChange, onRemove }) {
+function LessonCardEditor({ card, canRemove, index, onChange, onRemove, onUploadAsset, uploading }) {
+  const isUploadable = ["imagem", "video", "pdf"].includes(card.asset_type)
+  const acceptedFiles =
+    card.asset_type === "imagem"
+      ? ".png,.jpg,.jpeg,.webp,.gif,image/*"
+      : card.asset_type === "video"
+        ? ".mp4,.webm,.ogg,.mov,video/*"
+        : ".pdf,application/pdf"
+
   return (
     <article className="rounded-3xl border border-white/10 bg-slate-950/45 p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1476,8 +1672,33 @@ function LessonCardEditor({ card, canRemove, index, onChange, onRemove }) {
         </div>
         {card.asset_type !== "texto" ? (
           <>
+            {isUploadable ? (
+              <div className="rounded-2xl border border-dashed border-surf/25 bg-surf/[0.06] p-4 md:col-span-2">
+                <label className="mb-2 block text-sm font-medium text-slate-100">Upload do arquivo</label>
+                <input
+                  accept={acceptedFiles}
+                  className="block w-full text-sm text-slate-200 file:mr-4 file:rounded-2xl file:border-0 file:bg-white file:px-4 file:py-2 file:font-semibold file:text-slate-950"
+                  disabled={uploading}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (file) {
+                      onUploadAsset(index, file)
+                    }
+                    event.target.value = ""
+                  }}
+                  type="file"
+                />
+                <p className="mt-3 text-xs leading-5 text-slate-300">
+                  {uploading
+                    ? "Enviando arquivo..."
+                    : card.asset_name
+                      ? `Arquivo enviado: ${card.asset_name}`
+                      : "Voce pode enviar o arquivo agora ou manter uma URL manual no campo abaixo."}
+                </p>
+              </div>
+            ) : null}
             <FieldInput
-              label="URL do recurso"
+              label={isUploadable ? "URL publica ou gerada pelo upload" : "URL do recurso"}
               placeholder="https://..."
               value={card.asset_url}
               onChange={(value) => onChange(index, { asset_url: value })}
@@ -1898,16 +2119,20 @@ function AppShell() {
     ])
 
     startTransition(() => {
+      const availableCourseIds = new Set([
+        ...coursesList.map((course) => String(course.id)),
+        ...enrollmentList.map((enrollment) => String(enrollment.course_id)),
+      ])
+      const fallbackCourseId = (enrollmentList[0]?.course_id ?? coursesList[0]?.id ?? "").toString()
+      const nextSelectedCourseId = selectedCourseId && availableCourseIds.has(String(selectedCourseId)) ? selectedCourseId : fallbackCourseId
+
       setCurrentUser(me)
       setProfile(profileList[0] ?? null)
       setCourses(coursesList)
       setEnrollments(enrollmentList)
       setProgress(progressList)
       setPayments(paymentList)
-      if (!selectedCourseId) {
-        const firstCourseId = (enrollmentList[0]?.course_id ?? coursesList[0]?.id ?? "").toString()
-        setSelectedCourseId(firstCourseId)
-      }
+      setSelectedCourseId(nextSelectedCourseId)
     })
 
     return me
@@ -2066,18 +2291,56 @@ function AppShell() {
   }
 
   async function handleCreateCourse(courseForm) {
+    const payload = {
+      ...courseForm,
+      price: Number(courseForm.price),
+      capacity: Number(courseForm.capacity),
+    }
     const createdCourse = await apiFetch("/courses", {
       token,
       method: "POST",
-      body: {
-        ...courseForm,
-        price: Number(courseForm.price),
-        capacity: Number(courseForm.capacity),
-      },
+      body: payload,
     })
     await refreshSession()
     setSelectedCourseId(String(createdCourse.id))
     return createdCourse
+  }
+
+  async function handleUpdateCourse(courseId, courseForm) {
+    const payload = {
+      ...courseForm,
+      price: Number(courseForm.price),
+      capacity: Number(courseForm.capacity),
+    }
+    const updatedCourse = await apiFetch(`/courses/${courseId}`, {
+      token,
+      method: "PUT",
+      body: payload,
+    })
+    await refreshSession()
+    setSelectedCourseId(String(updatedCourse.id))
+    return updatedCourse
+  }
+
+  async function handleDeleteCourse(courseId) {
+    await apiFetch(`/courses/${courseId}`, {
+      token,
+      method: "DELETE",
+    })
+    await refreshSession()
+  }
+
+  async function handleUploadLessonAsset(file, assetType) {
+    const formData = new FormData()
+    formData.append("file", file)
+    if (assetType) {
+      formData.append("asset_type", assetType)
+    }
+    return apiFetch("/lessons/assets/upload", {
+      token,
+      method: "POST",
+      body: formData,
+    })
   }
 
   async function handleCreateLesson(lessonForm) {
@@ -2250,8 +2513,11 @@ function AppShell() {
                       notice={notice}
                       onCreateCourse={handleCreateCourse}
                       onCreateLesson={handleCreateLesson}
+                      onDeleteCourse={handleDeleteCourse}
                       onNotice={setNotice}
                       onSelectCourse={setSelectedCourseId}
+                      onUpdateCourse={handleUpdateCourse}
+                      onUploadLessonAsset={handleUploadLessonAsset}
                       selectedCourseId={selectedCourseId}
                     />
                   ) : (

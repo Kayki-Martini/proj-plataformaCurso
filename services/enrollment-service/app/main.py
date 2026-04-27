@@ -129,6 +129,19 @@ def fetch_service_json(url: str, token: str):
     return response.json()
 
 
+def touch_user_retention(auth_user_id: str, token: str, reason: str) -> None:
+    try:
+        response = requests.post(
+            f"{USER_SERVICE_URL}/users/retention/touch",
+            json={"auth_user_id": auth_user_id, "reason": reason},
+            headers=service_headers(token),
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        logger.warning("Nao foi possivel atualizar a persistencia do aluno %s: %s", auth_user_id, exc)
+
+
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
@@ -162,6 +175,8 @@ def create_enrollment(
         raise HTTPException(status_code=403, detail="Voce so pode se matricular no proprio CPF.")
 
     course = fetch_service_json(f"{COURSE_SERVICE_URL}/courses/{payload.course_id}", raw_token)
+    if course.get("is_deleted") or not course.get("is_active", True):
+        raise HTTPException(status_code=400, detail="Curso indisponivel para novas matriculas.")
     start_date = date.fromisoformat(course["start_date"])
     today = date.today()
     min_date = start_date - timedelta(weeks=5)
@@ -201,6 +216,7 @@ def create_enrollment(
     db.add(enrollment)
     db.commit()
     db.refresh(enrollment)
+    touch_user_retention(enrollment.user_id, raw_token, f"matricula_curso_{enrollment.course_id}")
     logger.info("Matricula criada para usuario=%s curso=%s", enrollment.user_id, enrollment.course_id)
     return enrollment
 

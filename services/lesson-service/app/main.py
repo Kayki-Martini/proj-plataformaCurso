@@ -3,11 +3,14 @@ import logging
 import os
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
+from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import Column, DateTime, Integer, Numeric, String, Text, UniqueConstraint, create_engine, func, text
@@ -23,6 +26,10 @@ logger = logging.getLogger("lesson-service")
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://lesson_user:lesson_pass@localhost:5432/lesson_db")
 JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-jwt-key")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "/app/uploads"))
+PUBLIC_ASSET_BASE_URL = os.getenv("PUBLIC_ASSET_BASE_URL", "http://localhost:8080").rstrip("/")
+MAX_ASSET_SIZE_MB = int(os.getenv("MAX_ASSET_SIZE_MB", "100"))
+MAX_ASSET_SIZE_BYTES = MAX_ASSET_SIZE_MB * 1024 * 1024
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -37,6 +44,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/lessons/assets/files", StaticFiles(directory=str(UPLOAD_DIR)), name="lesson-assets")
 
 LESSON_TYPES = {
     "video": 30,
@@ -46,6 +55,19 @@ LESSON_TYPES = {
 MAX_LESSONS_PER_COURSE = 40
 
 CARD_TYPES = {"texto", "imagem", "video", "pdf", "link", "embed"}
+UPLOADABLE_CARD_TYPES = {"imagem", "video", "pdf"}
+ALLOWED_ASSET_EXTENSIONS = {
+    ".png": "imagem",
+    ".jpg": "imagem",
+    ".jpeg": "imagem",
+    ".webp": "imagem",
+    ".gif": "imagem",
+    ".pdf": "pdf",
+    ".mp4": "video",
+    ".webm": "video",
+    ".ogg": "video",
+    ".mov": "video",
+}
 
 
 class Lesson(Base):
@@ -115,12 +137,81 @@ class LessonResponse(BaseModel):
     created_at: datetime
 
 
+class LessonAssetUploadResponse(BaseModel):
+    asset_type: str
+    asset_url: str
+    filename: str
+    content_type: str | None
+    size_bytes: int
+
+
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+
+def infer_asset_type_from_extension(filename: str) -> str:
+    extension = Path(filename).suffix.lower()
+    asset_type = ALLOWED_ASSET_EXTENSIONS.get(extension)
+    if not asset_type:
+        raise HTTPException(
+            status_code=400,
+            detail="Formato de arquivo nao suportado. Envie imagem, video ou PDF.",
+        )
+    return asset_type
+
+
+def build_public_asset_url(relative_path: Path) -> str:
+    return f"{PUBLIC_ASSET_BASE_URL}/lessons/assets/files/{relative_path.as_posix()}"
+
+
+def save_uploaded_asset(file: UploadFile, requested_asset_type: str | None) -> LessonAssetUploadResponse:
+    original_name = (file.filename or "").strip()
+    if not original_name:
+        raise HTTPException(status_code=400, detail="Arquivo invalido para upload.")
+
+    inferred_asset_type = infer_asset_type_from_extension(original_name)
+    asset_type = (requested_asset_type or inferred_asset_type).strip().lower()
+    if asset_type not in UPLOADABLE_CARD_TYPES:
+        raise HTTPException(status_code=400, detail="Upload disponivel apenas para imagem, video ou PDF.")
+    if asset_type != inferred_asset_type:
+        raise HTTPException(status_code=400, detail="O tipo do card nao corresponde ao arquivo enviado.")
+
+    extension = Path(original_name).suffix.lower()
+    target_directory = UPLOAD_DIR / asset_type
+    target_directory.mkdir(parents=True, exist_ok=True)
+    stored_filename = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid4().hex}{extension}"
+    target_path = target_directory / stored_filename
+    size_bytes = 0
+
+    try:
+        with target_path.open("wb") as output_stream:
+            while chunk := file.file.read(1024 * 1024):
+                size_bytes += len(chunk)
+                if size_bytes > MAX_ASSET_SIZE_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Arquivo excede o limite de {MAX_ASSET_SIZE_MB} MB.",
+                    )
+                output_stream.write(chunk)
+    except Exception:
+        if target_path.exists():
+            target_path.unlink()
+        raise
+    finally:
+        file.file.close()
+
+    relative_path = Path(asset_type) / stored_filename
+    return LessonAssetUploadResponse(
+        asset_type=asset_type,
+        asset_url=build_public_asset_url(relative_path),
+        filename=original_name,
+        content_type=file.content_type,
+        size_bytes=size_bytes,
+    )
 
 
 def parse_cards(raw_cards: str | None) -> list[LessonCard]:
@@ -240,6 +331,23 @@ async def unhandled_exception_handler(_, exc: Exception):
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "lesson-service"}
+
+
+@app.post("/lessons/assets/upload", response_model=LessonAssetUploadResponse, status_code=status.HTTP_201_CREATED)
+def upload_lesson_asset(
+    file: UploadFile = File(...),
+    asset_type: str | None = Form(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    ensure_admin(current_user)
+    upload_response = save_uploaded_asset(file, asset_type)
+    logger.info(
+        "Arquivo de aula enviado: nome=%s tipo=%s tamanho=%s",
+        upload_response.filename,
+        upload_response.asset_type,
+        upload_response.size_bytes,
+    )
+    return upload_response
 
 
 @app.get("/lessons/course/{course_id}", response_model=list[LessonResponse])
