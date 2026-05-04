@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
@@ -22,6 +23,8 @@ logger = logging.getLogger("course-service")
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://course_user:course_pass@localhost:5432/course_db")
 JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-jwt-key")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+DATABASE_MAX_RETRIES = int(os.getenv("DATABASE_MAX_RETRIES", "30"))
+DATABASE_RETRY_DELAY_SECONDS = float(os.getenv("DATABASE_RETRY_DELAY_SECONDS", "2"))
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -173,8 +176,27 @@ def get_course_or_404(db: Session, course_id: int) -> Course:
     return course
 
 
+def wait_for_database() -> None:
+    for attempt in range(1, DATABASE_MAX_RETRIES + 1):
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            return
+        except Exception:
+            if attempt == DATABASE_MAX_RETRIES:
+                raise
+            logger.warning(
+                "Banco indisponivel na tentativa %s/%s. Tentando novamente em %s segundos.",
+                attempt,
+                DATABASE_MAX_RETRIES,
+                DATABASE_RETRY_DELAY_SECONDS,
+            )
+            time.sleep(DATABASE_RETRY_DELAY_SECONDS)
+
+
 @app.on_event("startup")
 def on_startup():
+    wait_for_database()
     Base.metadata.create_all(bind=engine)
     run_migrations()
     logger.info("course-service iniciado.")

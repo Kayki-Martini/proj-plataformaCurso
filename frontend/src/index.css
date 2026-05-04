@@ -25,6 +25,14 @@ body {
   @apply rounded-3xl border border-white/10 bg-white/[0.06] backdrop-blur-xl shadow-glow;
 }
 
+.brand-showcase {
+  @apply flex w-fit max-w-full rounded-3xl border border-white/10 bg-slate-950/35 px-5 py-4 shadow-glow;
+}
+
+.brand-showcase__logo {
+  @apply h-auto w-full max-w-[300px];
+}
+
 .soft-input {
   @apply w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition focus:border-surf/60 focus:ring-2 focus:ring-surf/20;
 }

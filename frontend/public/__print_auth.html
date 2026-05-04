@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Preparando print</title>
+  </head>
+  <body>
+    <script>
+      const params = new URLSearchParams(window.location.hash.slice(1))
+      const token = params.get("token")
+      const path = params.get("path") || "/dashboard"
+
+      if (token) {
+        localStorage.setItem("ead-token", token)
+      } else {
+        localStorage.removeItem("ead-token")
+      }
+
+      window.location.replace(path.startsWith("/") ? path : `/${path}`)
+    </script>
+  </body>
+</html>

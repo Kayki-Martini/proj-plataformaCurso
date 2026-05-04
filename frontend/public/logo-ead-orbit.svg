@@ -1,0 +1,57 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">EAD Orbit</title>
+  <desc id="desc">Logo da plataforma EAD Orbit com livro, texto Orbit e planeta em orbita.</desc>
+  <defs>
+    <linearGradient id="blue" x1="148" y1="542" x2="820" y2="535" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00b9ff"/>
+      <stop offset="0.52" stop-color="#0054d6"/>
+      <stop offset="1" stop-color="#08347b"/>
+    </linearGradient>
+    <linearGradient id="orbit" x1="132" y1="500" x2="902" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0040c8"/>
+      <stop offset="0.58" stop-color="#0063d8"/>
+      <stop offset="1" stop-color="#ff7f2a"/>
+    </linearGradient>
+    <linearGradient id="planet" x1="752" y1="359" x2="853" y2="450" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffb347"/>
+      <stop offset="1" stop-color="#ff4e1f"/>
+    </linearGradient>
+    <filter id="glow" x="60" y="250" width="900" height="430" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="transparent"/>
+  <ellipse cx="511" cy="518" rx="380" ry="118" stroke="url(#orbit)" stroke-width="18" opacity="0.42" transform="rotate(-6 511 518)"/>
+  <path d="M170 474C294 384 680 327 850 403" stroke="url(#orbit)" stroke-width="11" stroke-linecap="round" opacity="0.82"/>
+  <path d="M195 631C336 676 656 656 829 548" stroke="url(#orbit)" stroke-width="9" stroke-linecap="round" opacity="0.62"/>
+  <path d="M814 388C849 402 876 424 894 453" stroke="#ff7f2a" stroke-width="14" stroke-linecap="round"/>
+
+  <g filter="url(#glow)" opacity="0.6">
+    <ellipse cx="361" cy="548" rx="260" ry="66" fill="#005fff"/>
+    <ellipse cx="748" cy="472" rx="134" ry="60" fill="#ff7f2a"/>
+  </g>
+
+  <g transform="translate(148 456)">
+    <path d="M28 36C71 24 111 26 151 50V139C111 116 72 112 28 126V36Z" fill="#11c7ff" stroke="#06306d" stroke-width="7"/>
+    <path d="M151 50C188 27 226 24 268 36V126C224 112 185 116 151 139V50Z" fill="#006ce8" stroke="#06306d" stroke-width="7"/>
+    <path d="M151 56V137" stroke="#bdf4ff" stroke-width="5" stroke-linecap="round" opacity="0.8"/>
+  </g>
+
+  <text x="272" y="579" fill="url(#blue)" font-family="Arial Black, Arial, sans-serif" font-size="144" font-weight="900" letter-spacing="-7" stroke="#06245a" stroke-width="7">ORBIT</text>
+
+  <g transform="translate(410 374)">
+    <rect width="204" height="54" rx="2" fill="#063aa8" stroke="#2c7cff" stroke-width="2"/>
+    <text x="38" y="42" fill="white" font-family="Arial Black, Arial, sans-serif" font-size="45" font-weight="900" letter-spacing="2">EAD</text>
+  </g>
+
+  <g transform="translate(742 340)">
+    <ellipse cx="59" cy="51" rx="52" ry="42" fill="url(#planet)"/>
+    <ellipse cx="58" cy="59" rx="73" ry="18" stroke="#ff7f2a" stroke-width="7" transform="rotate(-10 58 59)"/>
+    <path d="M13 62C42 72 83 72 123 58" stroke="#ff4e1f" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="48" cy="28" r="10" fill="#ffc65d" opacity="0.65"/>
+  </g>
+
+  <path d="M284 372L298 406L333 419L299 433L285 468L271 434L237 420L270 405L284 372Z" fill="#1ea8ff" opacity="0.75"/>
+  <path d="M678 373L687 396L710 405L688 414L679 437L669 415L647 406L669 396L678 373Z" fill="#7ceeff" opacity="0.72"/>
+</svg>

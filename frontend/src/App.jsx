@@ -3,41 +3,94 @@ import { Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom"
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080"
 const TOKEN_KEY = "ead-token"
+const BRAND_LOGO_SRC = "/logo-ead-orbit.svg"
 
 const LESSON_CARD_TYPES = [
   {
     value: "texto",
     label: "Texto",
-    hint: "Bloco rico para instrucoes, resumo da aula ou atividade guiada.",
+    hint: "Bloco rico para instruções, resumo da aula ou atividade guiada.",
   },
   {
     value: "imagem",
     label: "Imagem",
-    hint: "Envie uma imagem do seu computador ou use uma URL publica para montar galerias, infograficos ou capas.",
+    hint: "Envie uma imagem do seu computador ou use uma URL pública para montar galerias, infográficos ou capas.",
   },
   {
     value: "video",
-    label: "Video",
-    hint: "Envie um video em arquivo ou use um link direto/URL de YouTube ou Vimeo.",
+    label: "Vídeo",
+    hint: "Envie um vídeo em arquivo ou use um link direto/URL de YouTube ou Vimeo.",
   },
   {
     value: "pdf",
     label: "PDF",
-    hint: "Envie o PDF da aula ou mantenha uma URL publica para preview rapido do material.",
+    hint: "Envie o PDF da aula ou mantenha uma URL pública para pré-visualização rápida do material.",
   },
   {
     value: "link",
     label: "Link",
-    hint: "Encaminhe o aluno para ferramentas externas, formularios ou referencias.",
+    hint: "Encaminhe o aluno para ferramentas externas, formulários ou referências.",
   },
   {
     value: "embed",
     label: "Embed",
-    hint: "Ideal para dashboards, lousas, mapas mentais e outros iframes publicos.",
+    hint: "Ideal para dashboards, lousas, mapas mentais e outros iframes públicos.",
   },
 ]
 
 const CARD_TYPE_LABELS = Object.fromEntries(LESSON_CARD_TYPES.map((option) => [option.value, option.label]))
+
+const WIREFRAME_LESSON_CARDS = [
+  {
+    title: "Mapa da tela antes do visual",
+    body:
+      "Comece o wireframe como um contrato de estrutura: quais áreas existem, qual dado entra em cada uma e qual ação o usuário precisa enxergar primeiro. Para devs, isso reduz retrabalho porque separa arquitetura da interface de escolhas estéticas como cor, sombra e tipografia.",
+    asset_type: "texto",
+    asset_url: "",
+    asset_name: "",
+    button_label: "",
+  },
+  {
+    title: "Hierarquia de informação",
+    body:
+      "Organize os elementos em ordem de decisão: título da tarefa, contexto essencial, entrada de dados, ação primária e feedback. Um bom wireframe mostra o que deve ser lido, comparado ou clicado sem depender de decoração visual.",
+    asset_type: "texto",
+    asset_url: "",
+    asset_name: "",
+    button_label: "",
+  },
+  {
+    title: "Fluxos, estados e bordas",
+    body:
+      "Desenhe também carregamento, vazio, erro, sucesso, permissão negada e dados muito longos. Esses estados costumam virar bugs quando ficam invisíveis no wireframe, principalmente em formulários, dashboards e listas administrativas.",
+    asset_type: "texto",
+    asset_url: "",
+    asset_name: "",
+    button_label: "",
+  },
+  {
+    title: "Componentes que viram código",
+    body:
+      "Marque repetições como componentes: card, tabela, filtro, modal, toolbar, item de lista e campo de formulário. Nomear esses blocos no wireframe ajuda a criar props, separar responsabilidades e evitar componentes gigantes no frontend.",
+    asset_type: "texto",
+    asset_url: "",
+    asset_name: "",
+    button_label: "",
+  },
+  {
+    title: "Checklist de handoff para devs",
+    body:
+      "Antes de implementar, confirme comportamento responsivo, prioridade das ações, regras de validação, origem dos dados, mensagens de feedback e navegação entre telas. O wireframe termina quando a equipe consegue estimar a interface sem adivinhar o produto.",
+    asset_type: "texto",
+    asset_url: "",
+    asset_name: "",
+    button_label: "",
+  },
+]
+
+function createWireframeLessonCards() {
+  return WIREFRAME_LESSON_CARDS.map((card) => ({ ...card }))
+}
 
 function createEmptyLessonCard(index = 1) {
   return {
@@ -89,7 +142,7 @@ function getDefaultRoute(user) {
 }
 
 function getCardTypeHint(assetType) {
-  return LESSON_CARD_TYPES.find((option) => option.value === assetType)?.hint ?? "Configure o card para publicar o conteudo."
+  return LESSON_CARD_TYPES.find((option) => option.value === assetType)?.hint ?? "Configure o card para publicar o conteúdo."
 }
 
 function toEmbeddableUrl(url) {
@@ -129,7 +182,7 @@ function isDirectVideo(url) {
 
 function normalizeErrorDetail(detail) {
   if (!detail) {
-    return "Nao foi possivel concluir a solicitacao."
+    return "Não foi possível concluir a solicitação."
   }
 
   if (typeof detail === "string") {
@@ -156,7 +209,7 @@ function normalizeErrorDetail(detail) {
       })
       .filter(Boolean)
 
-    return messages.length > 0 ? messages.join(" | ") : "Erro de validacao na requisicao."
+    return messages.length > 0 ? messages.join(" | ") : "Erro de validação na requisição."
   }
 
   if (typeof detail === "object") {
@@ -187,13 +240,13 @@ async function apiFetch(path, { token, method = "GET", body } = {}) {
   } catch (error) {
     const message =
       error instanceof TypeError
-        ? "Falha de comunicacao com a API. Verifique se o gateway e os servicos estao ativos."
-        : "Nao foi possivel concluir a solicitacao."
+        ? "Falha de comunicação com a API. Verifique se o gateway e os serviços estão ativos."
+        : "Não foi possível concluir a solicitação."
     throw new Error(message)
   }
 
   if (!response.ok) {
-    let detail = "Nao foi possivel concluir a solicitacao."
+    let detail = "Não foi possível concluir a solicitação."
     try {
       const payload = await response.json()
       detail = normalizeErrorDetail(payload.detail ?? payload.message ?? detail)
@@ -240,7 +293,7 @@ function detectCardBrand(cardNumber) {
   if (/^3[47]/.test(digits)) return "Amex"
   if (/^6(?:011|5)/.test(digits)) return "Discover"
   if (/^35/.test(digits)) return "JCB"
-  return "Cartao de credito"
+  return "Cartão de crédito"
 }
 
 function sumPaidAmount(payments) {
@@ -298,13 +351,13 @@ function DashboardPage({
         <section className="grid gap-5 lg:grid-cols-[1.35fr,0.65fr]">
           <div className="glass-panel overflow-hidden p-8">
             <div className="mb-6 inline-flex rounded-full border border-white/10 bg-white/[0.08] px-3 py-1 text-xs uppercase tracking-[0.35em] text-surf">
-              visao admin
+              visão admin
             </div>
             <h1 className="max-w-3xl font-serif text-4xl text-white sm:text-5xl">
-              Seu cockpit administrativo agora separa cadastro, curriculo e experiencia do aluno.
+              Seu cockpit administrativo agora separa cadastro, currículo e experiência do aluno.
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300">
-              Use o Studio Admin para cadastrar cursos e desenhar aulas em cards. O restante da plataforma fica livre para catalogo, progresso e consumo do conteudo final.
+              Use o Studio Admin para cadastrar cursos e desenhar aulas em cards. O restante da plataforma fica livre para catálogo, progresso e consumo do conteúdo final.
             </p>
             <NavLink className="soft-button-primary mt-6 w-full sm:w-auto" to="/admin">
               Abrir Studio Admin
@@ -313,7 +366,7 @@ function DashboardPage({
 
           <div className="grid gap-4">
             <StatCard label="Cursos publicados" value={courses.length} accent="from-surf to-cyan-400" />
-            <StatCard label="Pagamentos do seu usuario" value={paidLessons} accent="from-mango to-coral" />
+            <StatCard label="Pagamentos do seu usuário" value={paidLessons} accent="from-mango to-coral" />
             <StatCard label="Acesso administrativo" value="ativo" accent="from-emerald-400 to-lime-300" />
           </div>
         </section>
@@ -322,10 +375,10 @@ function DashboardPage({
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold text-white">Cursos mais recentes</h2>
-              <p className="mt-1 text-sm text-slate-300">Confira rapidamente as turmas ja disponiveis antes de editar aulas no Studio Admin.</p>
+              <p className="mt-1 text-sm text-slate-300">Confira rapidamente as turmas já disponíveis antes de editar aulas no Studio Admin.</p>
             </div>
             <NavLink className="soft-button-muted" to="/courses">
-              Ver catalogo
+              Ver catálogo
             </NavLink>
           </div>
           <div className="mt-5 grid gap-4 xl:grid-cols-2">
@@ -345,8 +398,8 @@ function DashboardPage({
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-300">{course.description}</p>
                     <dl className="mt-4 space-y-2 text-sm text-slate-200">
-                      <InfoRow label="Inicio" value={formatDate(course.start_date)} />
-                      <InfoRow label="Janela" value={`${formatDate(course.enrollment_window_open)} ate ${formatDate(course.enrollment_window_close)}`} />
+                      <InfoRow label="Início" value={formatDate(course.start_date)} />
+                      <InfoRow label="Janela" value={`${formatDate(course.enrollment_window_open)} até ${formatDate(course.enrollment_window_close)}`} />
                     </dl>
                   </article>
                 ))
@@ -378,10 +431,10 @@ function DashboardPage({
             painel principal
           </div>
           <h1 className="max-w-2xl font-serif text-4xl text-white sm:text-5xl">
-            {currentUser?.name}, sua operacao EAD esta concentrada em um unico cockpit.
+            {currentUser?.name}, sua operação EAD está concentrada em um único cockpit.
           </h1>
           <p className="mt-4 max-w-2xl text-sm text-slate-300">
-            Complete o perfil, acompanhe matriculas, veja a vigencia do acesso e monitore o ritmo de estudos de cada curso.
+            Complete o perfil, acompanhe matrículas, veja a vigência do acesso e monitore o ritmo de estudos de cada curso.
           </p>
           {notice ? (
             <div
@@ -398,7 +451,7 @@ function DashboardPage({
 
         <div className="grid gap-4">
           <StatCard label="Cursos ativos" value={enrollments.length} accent="from-surf to-cyan-400" />
-          <StatCard label="Media de progresso" value={`${averageProgress}%`} accent="from-mango to-coral" />
+          <StatCard label="Média de progresso" value={`${averageProgress}%`} accent="from-mango to-coral" />
           <StatCard label="Aulas pagas" value={paidLessons} accent="from-emerald-400 to-lime-300" />
           <StatCard
             label="Total investido"
@@ -413,13 +466,13 @@ function DashboardPage({
           <div className="mb-5">
             <h2 className="text-2xl font-semibold text-white">Perfil do aluno</h2>
             <p className="mt-1 text-sm text-slate-300">
-              O CPF e obrigatorio para matricula. Os demais dados alimentam o relacionamento e a comunicacao.
+              O CPF é obrigatório para matrícula. Os demais dados alimentam o relacionamento e a comunicação.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <FieldInput label="CPF" value={form.cpf} onChange={(value) => setForm((prev) => ({ ...prev, cpf: value }))} />
             <FieldInput label="Nome" value={form.name} onChange={(value) => setForm((prev) => ({ ...prev, name: value }))} />
-            <FieldInput label="Email" value={form.email} onChange={(value) => setForm((prev) => ({ ...prev, email: value }))} />
+            <FieldInput label="E-mail" value={form.email} onChange={(value) => setForm((prev) => ({ ...prev, email: value }))} />
             <FieldInput
               label="WhatsApp"
               value={form.whatsapp}
@@ -439,9 +492,9 @@ function DashboardPage({
                 onChange={(event) => setForm((prev) => ({ ...prev, education_level: event.target.value }))}
                 value={form.education_level}
               >
-                <option value="medio">Ensino medio</option>
+                <option value="medio">Ensino médio</option>
                 <option value="superior">Ensino superior</option>
-                <option value="pos-graduacao">Pos-graduacao</option>
+                <option value="pos-graduacao">Pós-graduação</option>
               </select>
             </div>
           </div>
@@ -454,9 +507,9 @@ function DashboardPage({
           <div className="glass-panel p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-semibold text-white">Persistencia do cadastro</h2>
+                <h2 className="text-2xl font-semibold text-white">Persistência do cadastro</h2>
                 <p className="mt-1 text-sm text-slate-300">
-                  Seu perfil fica ativo por 6 meses apos a ultima atividade relevante na plataforma.
+                  Seu perfil fica ativo por 6 meses após a última atividade relevante na plataforma.
                 </p>
               </div>
               <span
@@ -471,10 +524,10 @@ function DashboardPage({
             </div>
             {profile ? (
               <dl className="mt-5 space-y-2 text-sm text-slate-200">
-                <InfoRow label="Politica" value={`${profile.persistence_policy_months ?? 6} meses apos a ultima atividade`} />
-                <InfoRow label="Mantido ate" value={formatDate(profile.persistence_expires_at)} />
+                <InfoRow label="Política" value={`${profile.persistence_policy_months ?? 6} meses após a última atividade`} />
+                <InfoRow label="Mantido até" value={formatDate(profile.persistence_expires_at)} />
                 <InfoRow
-                  label="Ultima atividade"
+                  label="Última atividade"
                   value={
                     profile.last_activity_at
                       ? `${formatDateTime(profile.last_activity_at)} - ${profile.last_activity_source ?? "atividade"}`
@@ -484,7 +537,7 @@ function DashboardPage({
               </dl>
             ) : (
               <p className="mt-5 text-sm leading-6 text-slate-300">
-                Assim que voce criar o perfil de aluno, a politica de persistencia passa a ser rastreada automaticamente.
+                Assim que você criar o perfil de aluno, a política de persistência passa a ser rastreada automaticamente.
               </p>
             )}
           </div>
@@ -494,8 +547,8 @@ function DashboardPage({
           <div className="mt-5 space-y-4">
             {enrollments.length === 0 ? (
               <EmptyState
-                title="Nenhuma matricula ainda"
-                text="Assim que voce se matricular em um curso, ele aparece aqui com prazo final e grupo."
+                title="Nenhuma matrícula ainda"
+                text="Assim que você se matricular em um curso, ele aparece aqui com prazo final e grupo."
               />
             ) : (
               enrollments.map((enrollment) => {
@@ -541,18 +594,18 @@ function CoursesPage({
       <section className="grid gap-5 lg:grid-cols-[1.4fr,0.8fr]">
         <div className="glass-panel overflow-hidden p-8">
           <div className="mb-6 inline-flex rounded-full border border-white/10 bg-white/[0.08] px-3 py-1 text-xs uppercase tracking-[0.35em] text-surf">
-            catalogo
+            catálogo
           </div>
           <h1 className="max-w-3xl font-serif text-4xl text-white sm:text-5xl">
-            Cursos organizados por turma, janela de matricula e valor.
+            Cursos organizados por turma, janela de matrícula e valor.
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300">
-            Aqui fica a vitrine da operacao EAD. Cursos pagos agora cobram no cartao aula por aula, conforme o aluno conclui a trilha.
+            Aqui fica a vitrine da operação EAD. Cursos pagos agora cobram no cartão aula por aula, conforme o aluno conclui a trilha.
           </p>
           {currentUser?.role === "admin" ? (
             <div className="mt-6 rounded-3xl border border-surf/25 bg-surf/[0.08] p-5">
               <p className="text-sm leading-6 text-slate-200">
-                O fluxo administrativo foi separado do catalogo publico. Use o Studio Admin para cadastrar cursos, escolher a turma e desenhar as aulas em cards de PDF, video, imagem, link ou embed.
+                O fluxo administrativo foi separado do catálogo público. Use o Studio Admin para cadastrar cursos, escolher a turma e desenhar as aulas em cards de PDF, vídeo, imagem, link ou embed.
               </p>
               <NavLink className="soft-button-primary mt-4 w-full sm:w-auto" to="/admin">
                 Abrir Studio Admin
@@ -564,7 +617,7 @@ function CoursesPage({
         <div className="grid gap-4">
           <StatCard label="Cursos ativos" value={activeCourses.length} accent="from-surf to-cyan-400" />
           <StatCard label="Cursos pagos" value={paidCourses.length} accent="from-mango to-coral" />
-          <StatCard label="Suas matriculas" value={enrollments.length} accent="from-emerald-400 to-lime-300" />
+          <StatCard label="Suas matrículas" value={enrollments.length} accent="from-emerald-400 to-lime-300" />
         </div>
       </section>
 
@@ -597,8 +650,8 @@ function CoursesPage({
               <p className="mt-3 flex-1 text-sm leading-6 text-slate-300">{course.description}</p>
               <dl className="mt-5 space-y-2 text-sm text-slate-200">
                 <InfoRow label="Turma" value={course.cohort_name} />
-                <InfoRow label="Inicio" value={formatDate(course.start_date)} />
-                <InfoRow label="Janela" value={`${formatDate(course.enrollment_window_open)} ate ${formatDate(course.enrollment_window_close)}`} />
+                <InfoRow label="Início" value={formatDate(course.start_date)} />
+                <InfoRow label="Janela" value={`${formatDate(course.enrollment_window_open)} até ${formatDate(course.enrollment_window_close)}`} />
                 <InfoRow label="Capacidade" value={`${course.capacity} alunos`} />
               </dl>
               {enrollment ? (
@@ -607,7 +660,7 @@ function CoursesPage({
                 </button>
               ) : currentUser?.role === "admin" ? (
                 <button className="soft-button-muted mt-6 w-full" disabled type="button">
-                  Matriculas de admin sao feitas via conta de aluno
+                  Matrículas de admin são feitas via conta de aluno
                 </button>
               ) : (
                 <button
@@ -619,7 +672,7 @@ function CoursesPage({
                 </button>
               )}
               {course.is_paid ? (
-                <p className="mt-3 text-xs leading-5 text-slate-300">O cartao de credito sera cobrado apenas nas aulas pagas que voce concluir.</p>
+                <p className="mt-3 text-xs leading-5 text-slate-300">O cartão de crédito será cobrado apenas nas aulas pagas que você concluir.</p>
               ) : null}
               {!profile?.cpf && currentUser?.role !== "admin" ? (
                 <p className="mt-3 text-xs text-coral">Complete seu perfil com CPF no dashboard antes de se matricular.</p>
@@ -735,15 +788,15 @@ function LessonsPage({
             jornada
           </div>
           <h1 className="max-w-3xl font-serif text-4xl text-white sm:text-5xl">
-            Aulas em cards com liberacao semanal e ordem protegida.
+            Aulas em cards com liberação semanal e ordem protegida.
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300">
-            Cada aula pode combinar texto, imagem, video, PDF, links externos ou embeds. Quando a trilha for paga, a cobranca acontece no cartao aula por aula, no momento da conclusao.
+            Cada aula pode combinar texto, imagem, vídeo, PDF, links externos ou embeds. Quando a trilha for paga, a cobrança acontece no cartão aula por aula, no momento da conclusão.
           </p>
           {currentUser?.role === "admin" ? (
             <div className="mt-6 rounded-3xl border border-mango/30 bg-mango/[0.08] p-5">
               <p className="text-sm leading-6 text-slate-200">
-                A criacao de cursos e aulas agora acontece no Studio Admin. Esta tela ficou focada na visualizacao da experiencia final e no acompanhamento da liberacao dos cards.
+                A criação de cursos e aulas agora acontece no Studio Admin. Esta tela ficou focada na visualização da experiência final e no acompanhamento da liberação dos cards.
               </p>
               <NavLink className="soft-button-primary mt-4 w-full sm:w-auto" to="/admin">
                 Montar aulas no Studio Admin
@@ -756,7 +809,7 @@ function LessonsPage({
           <div>
             <h2 className="text-xl font-semibold text-white">Curso em foco</h2>
             <p className="mt-1 text-sm text-slate-300">
-              Escolha a trilha para ver a sequencia, os cards liberados e o proximo passo do aluno.
+              Escolha a trilha para ver a sequência, os cards liberados e o próximo passo do aluno.
             </p>
           </div>
           <div>
@@ -777,10 +830,10 @@ function LessonsPage({
           <div className="grid gap-3 sm:grid-cols-2">
             <MiniPill
               title="Aulas liberadas"
-              text={selectedCourseId ? `${availableLessons} disponiveis para esta trilha.` : "Selecione um curso para calcular a janela."}
+              text={selectedCourseId ? `${availableLessons} disponíveis para esta trilha.` : "Selecione um curso para calcular a janela."}
             />
             <MiniPill
-              title="Concluidas"
+              title="Concluídas"
               text={selectedCourseId ? `${completedCount} registradas no progresso atual.` : "O progresso aparece assim que o curso for escolhido."}
             />
           </div>
@@ -802,13 +855,13 @@ function LessonsPage({
       {!selectedCourseId ? <EmptyState title="Selecione um curso" text="Escolha uma trilha para abrir a grade de aulas e visualizar seus cards." /> : null}
 
       {selectedCourseId && lessons.length === 0 ? (
-        <EmptyState title="Nenhuma aula cadastrada" text="Esse curso ainda nao recebeu aulas. Assim que o admin publicar, os cards aparecem aqui." />
+        <EmptyState title="Nenhuma aula cadastrada" text="Esse curso ainda não recebeu aulas. Assim que o admin publicar, os cards aparecem aqui." />
       ) : null}
 
       {selectedCourse ? (
         <div className="glass-panel flex flex-col gap-5 p-6 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.35em] text-slate-400">curriculo</p>
+            <p className="text-xs uppercase tracking-[0.35em] text-slate-400">currículo</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">{selectedCourse.title}</h2>
             <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">{selectedCourse.description}</p>
           </div>
@@ -841,7 +894,7 @@ function LessonsPage({
                       {lesson.type} - {lesson.duration_minutes} min
                     </span>
                     <span className="rounded-full bg-mango/[0.15] px-3 py-1 text-xs uppercase tracking-[0.25em] text-mango">
-                      {lessonPrice > 0 ? `${formatCurrency(lessonPrice)} no cartao` : "sem cobranca"}
+                      {lessonPrice > 0 ? `${formatCurrency(lessonPrice)} no cartão` : "sem cobrança"}
                     </span>
                     <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs uppercase tracking-[0.25em] text-slate-300">
                       {lesson.cards?.length ?? 0} cards
@@ -862,11 +915,11 @@ function LessonsPage({
                           : "bg-white/[0.08] text-slate-300"
                     }`}
                   >
-                    {completed ? "concluida" : unlocked ? "disponivel" : "bloqueada"}
+                    {completed ? "concluída" : unlocked ? "disponível" : "bloqueada"}
                   </span>
                   {paymentRecord ? (
                     <span className="rounded-full bg-emerald-500/[0.15] px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-100">
-                      pago no {paymentRecord.card_brand || "cartao"} final {paymentRecord.card_last_four || "****"}
+                      pago no {paymentRecord.card_brand || "cartão"} final {paymentRecord.card_last_four || "****"}
                     </span>
                   ) : null}
                   {canComplete ? (
@@ -875,19 +928,19 @@ function LessonsPage({
                         ? "Processando..."
                         : lessonPrice > 0 && !paymentRecord
                           ? `Pagar ${formatCurrency(lessonPrice)} e concluir`
-                          : "Marcar como concluida"}
+                           : "Marcar como concluída"}
                     </button>
                   ) : null}
                   {lessonPrice > 0 && !completed ? (
                     <p className="text-right text-xs leading-5 text-slate-300">
                       {paymentRecord
-                        ? "Pagamento desta aula ja aprovado. Agora basta concluir o conteudo."
-                        : "Esta aula gera cobranca unica no cartao quando for concluida."}
+                        ? "Pagamento desta aula já aprovado. Agora basta concluir o conteúdo."
+                        : "Esta aula gera cobrança única no cartão quando for concluída."}
                     </p>
                   ) : null}
                   {!unlocked && currentUser?.role !== "admin" ? (
                     <p className="text-right text-xs leading-5 text-slate-400">
-                      Esta aula abre quando a semana {lesson.release_week} estiver liberada e as anteriores forem concluidas.
+                      Esta aula abre quando a semana {lesson.release_week} estiver liberada e as anteriores forem concluídas.
                     </p>
                   ) : null}
                 </div>
@@ -895,7 +948,7 @@ function LessonsPage({
 
               {unlocked ? (
                 <div className="mt-6 grid gap-4 xl:grid-cols-2">
-                  {(lesson.cards?.length ? lesson.cards : [{ title: "Conteudo", body: lesson.content, asset_type: "texto" }]).map((card, index) => (
+                  {(lesson.cards?.length ? lesson.cards : [{ title: "Conteúdo", body: lesson.content, asset_type: "texto" }]).map((card, index) => (
                     <LessonCardDisplay
                       key={`${lesson.id}-${index}-${card.title}`}
                       card={{
@@ -911,7 +964,7 @@ function LessonsPage({
               ) : (
                 <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/35 p-5">
                   <p className="text-sm leading-6 text-slate-300">
-                    Esta aula esta protegida pela sequencia semanal. Quando chegar a vez dela, os cards aparecem aqui automaticamente.
+                    Esta aula está protegida pela sequência semanal. Quando chegar a vez dela, os cards aparecem aqui automaticamente.
                   </p>
                 </div>
               )}
@@ -925,10 +978,10 @@ function LessonsPage({
           <form className="glass-panel w-full max-w-2xl space-y-5 p-6" onSubmit={handlePaymentSubmit}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-mango">cartao de credito</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Concluir aula com cobranca</h2>
+                <p className="text-xs uppercase tracking-[0.35em] text-mango">cartão de crédito</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Concluir aula com cobrança</h2>
                 <p className="mt-2 text-sm leading-6 text-slate-300">
-                  {paymentModalLesson.title} sera cobrada por {formatCurrency(paymentModalLesson.price)} no cartao de credito.
+                  {paymentModalLesson.title} será cobrada por {formatCurrency(paymentModalLesson.price)} no cartão de crédito.
                 </p>
               </div>
               <button className="soft-button-muted" onClick={closePaymentModal} type="button">
@@ -938,20 +991,20 @@ function LessonsPage({
 
             <div className="grid gap-4 md:grid-cols-2">
               <FieldInput
-                label="Nome no cartao"
+                label="Nome no cartão"
                 onChange={(value) => setPaymentForm((prev) => ({ ...prev, card_holder_name: value }))}
                 required
                 value={paymentForm.card_holder_name}
               />
               <FieldInput
-                label="Numero do cartao"
+                label="Número do cartão"
                 inputMode="numeric"
                 onChange={(value) => setPaymentForm((prev) => ({ ...prev, card_number: value }))}
                 required
                 value={paymentForm.card_number}
               />
               <FieldInput
-                label="Mes de validade"
+                label="Mês de validade"
                 max={12}
                 min={1}
                 onChange={(value) => setPaymentForm((prev) => ({ ...prev, expiry_month: value }))}
@@ -985,7 +1038,7 @@ function LessonsPage({
 
             <button className="soft-button-primary w-full" disabled={processingLessonId === paymentModalLesson.id} type="submit">
               {processingLessonId === paymentModalLesson.id
-                ? "Autorizando cartao e concluindo..."
+                ? "Autorizando cartão e concluindo..."
                 : `Pagar ${formatCurrency(paymentModalLesson.price)} e concluir aula`}
             </button>
           </form>
@@ -1017,12 +1070,12 @@ function AdminStudioPage({
   const [courseForm, setCourseForm] = useState(() => createEmptyCourseForm())
   const [lessonForm, setLessonForm] = useState({
     course_id: selectedCourseId ?? "",
-    title: "",
-    description: "",
-    type: "video",
+    title: "Design de wireframe para devs",
+    description: "Aula prática para transformar ideias de produto em wireframes claros, implementáveis e preparados para estados reais da interface.",
+    type: "texto",
     order_index: "",
     price: 0,
-    cards: [createEmptyLessonCard()],
+    cards: createWireframeLessonCards(),
   })
 
   const selectedCourse = courses.find((course) => String(course.id) === String(selectedCourseId))
@@ -1082,6 +1135,16 @@ function AdminStudioPage({
     }))
   }
 
+  function applyWireframeLessonTemplate() {
+    setLessonForm((prev) => ({
+      ...prev,
+      title: "Design de wireframe para devs",
+      description: "Aula prática para transformar ideias de produto em wireframes claros, implementáveis e preparados para estados reais da interface.",
+      type: "texto",
+      cards: createWireframeLessonCards(),
+    }))
+  }
+
   function removeLessonCard(cardIndex) {
     setLessonForm((prev) => ({
       ...prev,
@@ -1113,7 +1176,7 @@ function AdminStudioPage({
   }
 
   async function handleDeleteCourse(course) {
-    const confirmDelete = window.confirm(`Deseja remover o curso "${course.title}" do catalogo?`)
+    const confirmDelete = window.confirm(`Deseja remover o curso "${course.title}" do catálogo?`)
     if (!confirmDelete) return
 
     setDeletingCourseId(String(course.id))
@@ -1122,7 +1185,7 @@ function AdminStudioPage({
       if (String(editingCourseId) === String(course.id)) {
         resetCourseEditor()
       }
-      onNotice({ type: "success", text: "Curso removido do catalogo com sucesso." })
+      onNotice({ type: "success", text: "Curso removido do catálogo com sucesso." })
     } catch (error) {
       onNotice({ type: "error", text: error.message })
     } finally {
@@ -1172,14 +1235,15 @@ function AdminStudioPage({
         content: firstTextCard?.body,
         cards: normalizedCards,
       })
-      onNotice({ type: "success", text: "Aula publicada com cards multimidia." })
+      onNotice({ type: "success", text: "Aula publicada com cards multimídia." })
       setLessonForm((prev) => ({
         ...prev,
         title: "",
         description: "",
+        type: "texto",
         order_index: "",
         price: selectedCourse?.is_paid ? Number(selectedCourse.price ?? 0) : 0,
-        cards: [createEmptyLessonCard()],
+        cards: createWireframeLessonCards(),
       }))
     } catch (error) {
       onNotice({ type: "error", text: error.message })
@@ -1196,15 +1260,15 @@ function AdminStudioPage({
             studio admin
           </div>
           <h1 className="max-w-3xl font-serif text-4xl text-white sm:text-5xl">
-            Cadastre cursos, ajuste o catalogo e monte aulas em cards sem misturar operacao com experiencia do aluno.
+            Cadastre cursos, ajuste o catálogo e monte aulas em cards sem misturar operação com experiência do aluno.
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
-            O painel administrativo agora concentra o CRUD completo de cursos, upload real de arquivos para as aulas e a montagem de trilhas em cards prontos para PDF, video, imagem, link ou embed.
+            O painel administrativo agora concentra o CRUD completo de cursos, upload real de arquivos para as aulas e a montagem de trilhas em cards prontos para PDF, vídeo, imagem, link ou embed.
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            <MiniPill title="CRUD completo" text="Crie, edite ou remova cursos do catalogo sem perder historico." />
-            <MiniPill title="Upload real" text="PDF, imagem e video podem ser enviados direto para os cards." />
-            <MiniPill title="Preview rapido" text="O que voce publica aqui aparece na trilha do aluno." />
+            <MiniPill title="CRUD completo" text="Crie, edite ou remova cursos do catálogo sem perder histórico." />
+            <MiniPill title="Upload real" text="PDF, imagem e vídeo podem ser enviados direto para os cards." />
+            <MiniPill title="Pré-visualização rápida" text="O que você publica aqui aparece na trilha do aluno." />
           </div>
         </div>
 
@@ -1278,17 +1342,17 @@ function AdminStudioPage({
                   {editingCourseId ? "Editar curso" : "Cadastrar curso"}
                 </h2>
                 <p className="mt-1 text-sm text-slate-300">
-                  Defina turma, datas, capacidade maxima de 200 alunos, disponibilidade e o valor base por aula para trilhas pagas.
+                  Defina turma, datas, capacidade máxima de 200 alunos, disponibilidade e o valor base por aula para trilhas pagas.
                 </p>
               </div>
               {editingCourseId ? (
                 <button className="soft-button-muted" onClick={resetCourseEditor} type="button">
-                  Cancelar edicao
+                  Cancelar edição
                 </button>
               ) : null}
             </div>
             <FieldInput
-              label="Titulo"
+              label="Título"
               required
               value={courseForm.title}
               onChange={(value) => setCourseForm((prev) => ({ ...prev, title: value }))}
@@ -1314,7 +1378,7 @@ function AdminStudioPage({
               onChange={(value) => setCourseForm((prev) => ({ ...prev, capacity: Number(value) }))}
             />
             <FieldInput
-              label="Inicio"
+              label="Início"
               required
               type="date"
               value={courseForm.start_date}
@@ -1328,7 +1392,7 @@ function AdminStudioPage({
               onChange={(value) => setCourseForm((prev) => ({ ...prev, end_date: value }))}
             />
             <div className="lg:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-slate-200">Descricao</label>
+              <label className="mb-2 block text-sm font-medium text-slate-200">Descrição</label>
               <textarea
                 className="soft-input min-h-28"
                 required
@@ -1368,10 +1432,10 @@ function AdminStudioPage({
               <button className="soft-button-primary w-full" disabled={creatingCourse} type="submit">
                 {creatingCourse
                   ? editingCourseId
-                    ? "Salvando alteracoes..."
+                    ? "Salvando alterações..."
                     : "Publicando curso..."
                   : editingCourseId
-                    ? "Salvar alteracoes"
+                    ? "Salvar alterações"
                     : "Cadastrar curso"}
               </button>
             </div>
@@ -1382,7 +1446,7 @@ function AdminStudioPage({
               <div>
                 <h2 className="text-2xl font-semibold text-white">Cursos cadastrados</h2>
                 <p className="mt-1 text-sm text-slate-300">
-                  Selecione um curso para focar nas aulas, editar o catalogo ou remover a turma publicada.
+                  Selecione um curso para focar nas aulas, editar o catálogo ou remover a turma publicada.
                 </p>
               </div>
               <span className="rounded-full bg-white/[0.08] px-3 py-1 text-xs uppercase tracking-[0.25em] text-slate-200">
@@ -1421,8 +1485,8 @@ function AdminStudioPage({
                       <p className="mt-3 text-sm leading-6 text-slate-300">{course.description}</p>
                       <dl className="mt-4 space-y-2 text-sm text-slate-200">
                         <InfoRow label="Turma" value={course.cohort_name} />
-                        <InfoRow label="Inicio" value={formatDate(course.start_date)} />
-                        <InfoRow label="Janela" value={`${formatDate(course.enrollment_window_open)} ate ${formatDate(course.enrollment_window_close)}`} />
+                        <InfoRow label="Início" value={formatDate(course.start_date)} />
+                        <InfoRow label="Janela" value={`${formatDate(course.enrollment_window_open)} até ${formatDate(course.enrollment_window_close)}`} />
                         <InfoRow label="Capacidade" value={`${course.capacity} alunos`} />
                       </dl>
                     </button>
@@ -1436,7 +1500,7 @@ function AdminStudioPage({
                         onClick={() => handleDeleteCourse(course)}
                         type="button"
                       >
-                        {deletingCourseId === String(course.id) ? "Removendo..." : "Remover do catalogo"}
+                        {deletingCourseId === String(course.id) ? "Removendo..." : "Remover do catálogo"}
                       </button>
                     </div>
                   </article>
@@ -1451,7 +1515,7 @@ function AdminStudioPage({
             <div>
               <h2 className="text-2xl font-semibold text-white">Criar aula em cards</h2>
               <p className="mt-1 text-sm text-slate-300">
-                Monte a aula como uma sequencia de blocos. Defina tambem se a conclusao da aula gera cobranca no cartao ou se ela sera gratuita.
+                Monte a aula como uma sequência de blocos. Defina também se a conclusão da aula gera cobrança no cartão ou se ela será gratuita.
               </p>
             </div>
 
@@ -1473,7 +1537,7 @@ function AdminStudioPage({
                 </select>
               </div>
               <FieldInput
-                label="Titulo"
+                label="Título"
                 required
                 value={lessonForm.title}
                 onChange={(value) => setLessonForm((prev) => ({ ...prev, title: value }))}
@@ -1487,7 +1551,7 @@ function AdminStudioPage({
                 onChange={(value) => setLessonForm((prev) => ({ ...prev, order_index: value }))}
               />
               <FieldInput
-                label="Preco da aula"
+                label="Preço da aula"
                 min={0}
                 step="0.01"
                 type="number"
@@ -1501,7 +1565,7 @@ function AdminStudioPage({
                   onChange={(event) => setLessonForm((prev) => ({ ...prev, type: event.target.value }))}
                   value={lessonForm.type}
                 >
-                  <option value="video">Video</option>
+                  <option value="video">Vídeo</option>
                   <option value="texto">Texto</option>
                   <option value="atividade">Atividade</option>
                 </select>
@@ -1509,11 +1573,11 @@ function AdminStudioPage({
               <div className="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm text-slate-200">
                 <p className="font-medium text-white">Regra aplicada automaticamente</p>
                 <p className="mt-1 leading-6 text-slate-300">
-                  A release semanal segue a ordem da aula, dentro do limite de 40 aulas por curso. Se o preco for maior que zero, a cobranca acontece no cartao ao concluir esta etapa.
+                  A liberação semanal segue a ordem da aula, dentro do limite de 40 aulas por curso. Se o preço for maior que zero, a cobrança acontece no cartão ao concluir esta etapa.
                 </p>
               </div>
               <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-slate-200">Descricao</label>
+                <label className="mb-2 block text-sm font-medium text-slate-200">Descrição</label>
                 <textarea
                   className="soft-input min-h-24"
                   required
@@ -1528,12 +1592,17 @@ function AdminStudioPage({
                 <div>
                   <h3 className="text-lg font-semibold text-white">Cards da aula</h3>
                   <p className="mt-1 text-sm text-slate-300">
-                    Combine quantos blocos precisar para contar a historia da aula. Cards de imagem, video e PDF aceitam upload real de arquivo.
+                    Combine quantos blocos precisar para contar a história da aula. Cards de imagem, vídeo e PDF aceitam upload real de arquivo.
                   </p>
                 </div>
-                <button className="soft-button-muted" onClick={addLessonCard} type="button">
-                  Adicionar card
-                </button>
+                <div className="flex flex-wrap gap-3">
+                  <button className="soft-button-muted" onClick={applyWireframeLessonTemplate} type="button">
+                    Modelo wireframe devs
+                  </button>
+                  <button className="soft-button-muted" onClick={addLessonCard} type="button">
+                    Adicionar card
+                  </button>
+                </div>
               </div>
               <div className="mt-4 space-y-4">
                 {lessonForm.cards.map((card, index) => (
@@ -1560,7 +1629,7 @@ function AdminStudioPage({
             <div className="glass-panel p-6">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-semibold text-white">Curriculo em foco</h2>
+                  <h2 className="text-2xl font-semibold text-white">Currículo em foco</h2>
                   <p className="mt-1 text-sm text-slate-300">
                     {selectedCourse ? `Cards publicados para ${selectedCourse.title}.` : "Selecione um curso para ver as aulas existentes."}
                   </p>
@@ -1573,9 +1642,9 @@ function AdminStudioPage({
               </div>
               <div className="mt-5 space-y-4">
                 {!selectedCourse ? (
-                  <EmptyState title="Selecione um curso" text="Escolha a turma acima para iniciar a criacao de aulas e acompanhar o curriculo." />
+                  <EmptyState title="Selecione um curso" text="Escolha a turma acima para iniciar a criação de aulas e acompanhar o currículo." />
                 ) : lessons.length === 0 ? (
-                  <EmptyState title="Sem aulas publicadas" text="A primeira aula desta turma pode ser montada agora com cards multimidia." />
+                  <EmptyState title="Sem aulas publicadas" text="A primeira aula desta turma pode ser montada agora com cards multimídia." />
                 ) : (
                   lessons.map((lesson) => (
                     <article key={lesson.id} className="rounded-3xl border border-white/10 bg-slate-950/35 p-5">
@@ -1588,7 +1657,7 @@ function AdminStudioPage({
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <span className="rounded-full bg-mango/[0.15] px-3 py-1 text-xs uppercase tracking-[0.25em] text-mango">
-                            {Number(lesson.price ?? 0) > 0 ? `${formatCurrency(lesson.price)} no cartao` : "sem cobranca"}
+                            {Number(lesson.price ?? 0) > 0 ? `${formatCurrency(lesson.price)} no cartão` : "sem cobrança"}
                           </span>
                           <span className="rounded-full bg-surf/[0.15] px-3 py-1 text-xs uppercase tracking-[0.25em] text-surf">
                             {lesson.cards?.length ?? 0} cards
@@ -1645,7 +1714,7 @@ function LessonCardEditor({ card, canRemove, index, onChange, onRemove, onUpload
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <FieldInput label="Titulo do card" value={card.title} onChange={(value) => onChange(index, { title: value })} />
+        <FieldInput label="Título do card" value={card.title} onChange={(value) => onChange(index, { title: value })} />
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-200">Tipo de recurso</label>
           <select
@@ -1662,7 +1731,7 @@ function LessonCardEditor({ card, canRemove, index, onChange, onRemove, onUpload
         </div>
         <div className="md:col-span-2">
           <label className="mb-2 block text-sm font-medium text-slate-200">
-            {card.asset_type === "texto" ? "Conteudo do card" : "Texto de apoio ou contexto"}
+            {card.asset_type === "texto" ? "Conteúdo do card" : "Texto de apoio ou contexto"}
           </label>
           <textarea
             className="soft-input min-h-24"
@@ -1693,18 +1762,18 @@ function LessonCardEditor({ card, canRemove, index, onChange, onRemove, onUpload
                     ? "Enviando arquivo..."
                     : card.asset_name
                       ? `Arquivo enviado: ${card.asset_name}`
-                      : "Voce pode enviar o arquivo agora ou manter uma URL manual no campo abaixo."}
+                      : "Você pode enviar o arquivo agora ou manter uma URL manual no campo abaixo."}
                 </p>
               </div>
             ) : null}
             <FieldInput
-              label={isUploadable ? "URL publica ou gerada pelo upload" : "URL do recurso"}
+              label={isUploadable ? "URL pública ou gerada pelo upload" : "URL do recurso"}
               placeholder="https://..."
               value={card.asset_url}
               onChange={(value) => onChange(index, { asset_url: value })}
             />
             <FieldInput
-              label="Texto do botao (opcional)"
+              label="Texto do botão (opcional)"
               placeholder="Abrir material"
               value={card.button_label}
               onChange={(value) => onChange(index, { button_label: value })}
@@ -1716,7 +1785,7 @@ function LessonCardEditor({ card, canRemove, index, onChange, onRemove, onUpload
       <p className="mt-3 text-xs leading-5 text-slate-400">{getCardTypeHint(card.asset_type)}</p>
 
       <div className="mt-4">
-        <p className="mb-2 text-xs uppercase tracking-[0.3em] text-slate-500">preview</p>
+        <p className="mb-2 text-xs uppercase tracking-[0.3em] text-slate-500">pré-visualização</p>
         <LessonCardDisplay card={card} compact />
       </div>
     </article>
@@ -1731,7 +1800,7 @@ function LessonCardDisplay({ card, compact = false }) {
     (card.asset_type === "pdf"
       ? "Abrir PDF"
       : card.asset_type === "video"
-        ? "Abrir video"
+        ? "Abrir vídeo"
         : card.asset_type === "imagem"
           ? "Abrir imagem"
           : "Abrir recurso")
@@ -1784,7 +1853,7 @@ function LessonAssetPreview({ card, compact = false }) {
         allowFullScreen
         className={`w-full rounded-2xl border border-white/10 bg-slate-950 ${compact ? "min-h-[220px]" : "min-h-[320px]"}`}
         src={toEmbeddableUrl(assetUrl)}
-        title={card.title || "Video da aula"}
+        title={card.title || "Vídeo da aula"}
       />
     )
   }
@@ -1794,7 +1863,7 @@ function LessonAssetPreview({ card, compact = false }) {
       <iframe
         className={`w-full rounded-2xl border border-white/10 bg-slate-950 ${compact ? "min-h-[260px]" : "min-h-[380px]"}`}
         src={card.asset_type === "embed" ? toEmbeddableUrl(assetUrl) : assetUrl}
-        title={card.title || "Conteudo incorporado"}
+        title={card.title || "Conteúdo incorporado"}
       />
     )
   }
@@ -1834,13 +1903,13 @@ function ProgressPage({
           <div className="glass-panel p-6">
             <h1 className="text-3xl font-semibold text-white">Progresso por aluno</h1>
             <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">
-              Escolha uma turma para acompanhar a barra de progresso individual, a proxima aula de cada aluno e o ritmo geral da trilha.
+              Escolha uma turma para acompanhar a barra de progresso individual, a próxima aula de cada aluno e o ritmo geral da trilha.
             </p>
           </div>
           <div className="grid gap-4">
             <StatCard label="Matriculados" value={adminCourseProgress.length} accent="from-surf to-cyan-400" />
-            <StatCard label="Media da turma" value={`${averageProgress}%`} accent="from-mango to-coral" />
-            <StatCard label="Concluiram tudo" value={completedStudents} accent="from-emerald-400 to-lime-300" />
+            <StatCard label="Média da turma" value={`${averageProgress}%`} accent="from-mango to-coral" />
+            <StatCard label="Concluíram tudo" value={completedStudents} accent="from-emerald-400 to-lime-300" />
           </div>
         </section>
 
@@ -1850,7 +1919,7 @@ function ProgressPage({
               <h2 className="text-2xl font-semibold text-white">Turma em foco</h2>
               <p className="mt-1 text-sm text-slate-300">
                 {selectedCourse
-                  ? `Acompanhando ${selectedCourse.title} para enxergar a evolucao aluno por aluno.`
+                  ? `Acompanhando ${selectedCourse.title} para enxergar a evolução aluno por aluno.`
                   : "Selecione um curso para liberar a leitura individual da turma."}
               </p>
             </div>
@@ -1877,7 +1946,7 @@ function ProgressPage({
         ) : adminProgressLoading ? (
           <div className="glass-panel flex min-h-[24vh] items-center justify-center p-10 text-slate-200">Carregando progresso da turma...</div>
         ) : adminCourseProgress.length === 0 ? (
-          <EmptyState title="Nenhum aluno matriculado" text="Quando houver matriculas nesta turma, o progresso individual sera listado aqui." />
+          <EmptyState title="Nenhum aluno matriculado" text="Quando houver matrículas nesta turma, o progresso individual será listado aqui." />
         ) : (
           <section className="grid gap-5 xl:grid-cols-2">
             {adminCourseProgress.map((item) => (
@@ -1898,11 +1967,11 @@ function ProgressPage({
                   <ProgressMeter percentage={item.percentage} />
                 </div>
                 <dl className="mt-5 space-y-2 text-sm text-slate-200">
-                  <InfoRow label="Concluidas" value={`${item.completed_lessons}/${item.total_lessons}`} />
+                  <InfoRow label="Concluídas" value={`${item.completed_lessons}/${item.total_lessons}`} />
                   <InfoRow label="Liberadas" value={item.available_lessons} />
-                  <InfoRow label="Proxima aula" value={item.next_lesson || "Curso finalizado"} />
+                  <InfoRow label="Próxima aula" value={item.next_lesson || "Curso finalizado"} />
                   <InfoRow label="CPF" value={item.student_cpf} />
-                  <InfoRow label="Acesso ate" value={formatDate(item.access_expires_at)} />
+                  <InfoRow label="Acesso até" value={formatDate(item.access_expires_at)} />
                 </dl>
               </article>
             ))}
@@ -1917,13 +1986,13 @@ function ProgressPage({
       <div className="glass-panel p-6">
         <h1 className="text-3xl font-semibold text-white">Progresso consolidado</h1>
         <p className="mt-2 text-sm text-slate-300">
-          Veja o percentual, a proxima aula e o periodo restante de acesso em cada curso.
+          Veja o percentual, a próxima aula e o período restante de acesso em cada curso.
         </p>
       </div>
 
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {progress.length === 0 ? (
-          <EmptyState title="Sem progresso ainda" text="O indicador aparece assim que houver matriculas ativas e aulas cadastradas." />
+          <EmptyState title="Sem progresso ainda" text="O indicador aparece assim que houver matrículas ativas e aulas cadastradas." />
         ) : (
           progress.map((item) => (
             <article key={item.course_id} className="glass-panel p-6">
@@ -1937,10 +2006,10 @@ function ProgressPage({
                 <ProgressMeter percentage={item.percentage} />
               </div>
               <dl className="mt-5 space-y-2 text-sm text-slate-200">
-                <InfoRow label="Concluidas" value={`${item.completed_lessons}/${item.total_lessons}`} />
+                <InfoRow label="Concluídas" value={`${item.completed_lessons}/${item.total_lessons}`} />
                 <InfoRow label="Liberadas" value={item.available_lessons} />
-                <InfoRow label="Proxima aula" value={item.next_lesson || "Curso finalizado"} />
-                <InfoRow label="Acesso ate" value={formatDate(item.access_expires_at)} />
+                <InfoRow label="Próxima aula" value={item.next_lesson || "Curso finalizado"} />
+                <InfoRow label="Acesso até" value={formatDate(item.access_expires_at)} />
               </dl>
             </article>
           ))
@@ -1978,19 +2047,19 @@ function LoginPage({ onLogin, onRegister, loading, notice, onNotice }) {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(255,179,71,0.18),transparent_22%),radial-gradient(circle_at_85%_15%,rgba(110,231,249,0.14),transparent_22%),radial-gradient(circle_at_50%_100%,rgba(255,127,80,0.16),transparent_25%)]" />
       <div className="relative grid w-full max-w-6xl gap-6 lg:grid-cols-[1.1fr,0.9fr]">
         <section className="glass-panel p-8 lg:p-10">
-          <p className="rounded-full border border-white/10 bg-white/[0.08] px-4 py-2 text-xs uppercase tracking-[0.35em] text-surf">
-            ead orbit
-          </p>
+          <div className="brand-showcase mb-7">
+            <img className="brand-showcase__logo" src={BRAND_LOGO_SRC} alt="EAD Orbit" />
+          </div>
           <h1 className="mt-6 max-w-2xl font-serif text-5xl text-white">
-            Microservicos prontos para operar cursos, aulas e progresso sem friccao.
+            Aprenda no seu ritmo com trilhas guiadas, aulas liberadas por etapa e progresso claro.
           </h1>
           <p className="mt-5 max-w-xl text-sm leading-7 text-slate-300">
-            A plataforma combina autenticacao JWT, gateway central, bancos PostgreSQL isolados e uma experiencia React para acompanhar toda a jornada do aluno.
+            Entre para acompanhar suas turmas, concluir aulas, acessar materiais e manter sua rotina de estudos organizada em um único lugar.
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            <MiniPill title="Gateway unico" text="Rotas centralizadas para os 7 servicos." />
-            <MiniPill title="Janela de matricula" text="Valida 5 a 1 semanas antes do inicio." />
-            <MiniPill title="Liberacao semanal" text="A ordem das aulas e protegida por regra." />
+            <MiniPill title="Trilhas por turma" text="Veja cronograma, início das aulas e janela de matrícula." />
+            <MiniPill title="Materiais da aula" text="Acesse vídeos, PDFs, links e atividades no mesmo fluxo." />
+            <MiniPill title="Progresso visível" text="Acompanhe cada etapa concluída e o próximo passo da jornada." />
           </div>
         </section>
 
@@ -2012,11 +2081,11 @@ function LoginPage({ onLogin, onRegister, loading, notice, onNotice }) {
             </button>
           </div>
 
-          <h2 className="text-3xl font-semibold text-white">{mode === "login" ? "Acesse sua area" : "Abra sua conta"}</h2>
+          <h2 className="text-3xl font-semibold text-white">{mode === "login" ? "Acesse sua área de estudos" : "Crie sua conta"}</h2>
           <p className="mt-2 text-sm text-slate-300">
             {mode === "login"
-              ? "Use email e senha para entrar no dashboard."
-              : "Cadastre um novo usuario. Para admin, informe o codigo administrativo configurado no ambiente."}
+              ? "Use seu e-mail e senha para entrar nas trilhas, materiais e progresso."
+              : "Cadastre-se para acompanhar cursos, aulas e matrículas. Contas administrativas usam um código interno."}
           </p>
 
           {notice ? (
@@ -2042,7 +2111,7 @@ function LoginPage({ onLogin, onRegister, loading, notice, onNotice }) {
               />
             ) : null}
             <FieldInput
-              label="Email"
+              label="E-mail"
               onChange={(value) => setForm((prev) => ({ ...prev, email: value }))}
               required
               type="email"
@@ -2071,7 +2140,7 @@ function LoginPage({ onLogin, onRegister, loading, notice, onNotice }) {
                 </div>
                 {form.role === "admin" ? (
                   <FieldInput
-                    label="Codigo administrativo"
+                    label="Código administrativo"
                     required
                     value={form.admin_code}
                     onChange={(value) => setForm((prev) => ({ ...prev, admin_code: value }))}
@@ -2082,7 +2151,7 @@ function LoginPage({ onLogin, onRegister, loading, notice, onNotice }) {
           </div>
 
           <button className="soft-button-primary mt-8 w-full" disabled={loading} type="submit">
-            {loading ? "Processando..." : mode === "login" ? "Entrar na plataforma" : "Criar conta e entrar"}
+            {loading ? "Processando..." : mode === "login" ? "Entrar no campus" : "Criar conta e continuar"}
           </button>
         </form>
       </div>
@@ -2232,7 +2301,7 @@ function AppShell() {
       localStorage.setItem(TOKEN_KEY, data.access_token)
       setToken(data.access_token)
       const me = await hydrateSession(data.access_token)
-      setNotice({ type: "success", text: "Sessao iniciada com sucesso." })
+      setNotice({ type: "success", text: "Sessão iniciada com sucesso." })
       navigate(getDefaultRoute(me))
     } finally {
       setLoading(false)
@@ -2286,7 +2355,7 @@ function AppShell() {
       },
     })
     await refreshSession()
-    setNotice({ type: "success", text: `Matricula confirmada em ${course.title}.` })
+    setNotice({ type: "success", text: `Matrícula confirmada em ${course.title}.` })
     navigate("/dashboard")
   }
 
@@ -2409,7 +2478,7 @@ function AppShell() {
     currentUser?.role === "admin"
       ? [
           ["/admin", "Studio Admin"],
-          ["/dashboard", "Visao geral"],
+          ["/dashboard", "Visão geral"],
           ["/courses", "Cursos"],
           ["/lessons", "Aulas"],
           ["/progress", "Progresso da turma"],
@@ -2426,7 +2495,7 @@ function AppShell() {
       <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-6 px-4 py-5 lg:flex-row lg:px-6">
         <aside className="glass-panel h-fit w-full p-5 lg:sticky lg:top-5 lg:w-72">
           <div className="rounded-3xl bg-gradient-to-br from-surf/20 via-white/5 to-mango/20 p-5">
-            <p className="text-xs uppercase tracking-[0.35em] text-surf">ead orbit</p>
+            <img className="h-auto w-full max-w-[190px]" src={BRAND_LOGO_SRC} alt="EAD Orbit" />
             <h1 className="mt-3 text-2xl font-semibold text-white">{currentUser?.name}</h1>
             <p className="mt-1 text-sm text-slate-300">{currentUser?.role}</p>
           </div>
