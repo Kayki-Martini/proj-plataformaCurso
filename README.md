@@ -81,4 +81,7 @@ docker compose up --build
 
 - Cada servico possui seu proprio banco PostgreSQL isolado.
 - Os scripts SQL ficam em `services/*/sql/schema.sql`.
+- Modelo de dados consolidado em `docs/MODELO_DE_DADOS.md`.
+- Documentacao tecnica consolidada em `docs/SISTEMA_EAD_DOCUMENTACAO.md`.
+- Prints das telas do frontend em `docs/FRONTEND_PRINTS.md`.
 - Os servicos usam `FastAPI`, com logs basicos e tratamento de erros por `HTTPException`.

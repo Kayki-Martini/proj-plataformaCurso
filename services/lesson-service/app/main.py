@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -30,6 +31,8 @@ UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "/app/uploads"))
 PUBLIC_ASSET_BASE_URL = os.getenv("PUBLIC_ASSET_BASE_URL", "http://localhost:8080").rstrip("/")
 MAX_ASSET_SIZE_MB = int(os.getenv("MAX_ASSET_SIZE_MB", "100"))
 MAX_ASSET_SIZE_BYTES = MAX_ASSET_SIZE_MB * 1024 * 1024
+DATABASE_MAX_RETRIES = int(os.getenv("DATABASE_MAX_RETRIES", "30"))
+DATABASE_RETRY_DELAY_SECONDS = float(os.getenv("DATABASE_RETRY_DELAY_SECONDS", "2"))
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -310,8 +313,27 @@ def migrate_legacy_content(db: Session):
     logger.info("Migracao de conteudo legado concluida para %s aulas.", len(legacy_lessons))
 
 
+def wait_for_database() -> None:
+    for attempt in range(1, DATABASE_MAX_RETRIES + 1):
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            return
+        except Exception:
+            if attempt == DATABASE_MAX_RETRIES:
+                raise
+            logger.warning(
+                "Banco indisponivel na tentativa %s/%s. Tentando novamente em %s segundos.",
+                attempt,
+                DATABASE_MAX_RETRIES,
+                DATABASE_RETRY_DELAY_SECONDS,
+            )
+            time.sleep(DATABASE_RETRY_DELAY_SECONDS)
+
+
 @app.on_event("startup")
 def on_startup():
+    wait_for_database()
     Base.metadata.create_all(bind=engine)
     run_migrations()
     db = SessionLocal()

@@ -80,8 +80,14 @@ services/
   progress-service/
   payment-service/
 docs/
+  FRONTEND_PRINTS.md
+  frontend-prints/
+  MODELO_DE_DADOS.md
+  NOMENCLATURA_ENTIDADES_BD_PT_BR.md
   SISTEMA_EAD_DOCUMENTACAO.md
   SISTEMA_EAD_DOCUMENTACAO.pdf
+  entidades-bd-plataforma-ead-pt-br.png
+  modelagem-dados.png
 docker-compose.yml
 README.md
 ```
@@ -563,6 +569,20 @@ Comportamentos relevantes:
 - O Studio Admin concentra cadastro de cursos e aulas.
 - Em aulas pagas, o modal de cartao abre somente no momento da conclusao.
 
+### 10.1 Prints das telas
+
+Os prints das telas reais do frontend estao em
+[`docs/FRONTEND_PRINTS.md`](FRONTEND_PRINTS.md) e na pasta
+`docs/frontend-prints/`.
+
+O material cobre:
+
+- Login.
+- Dashboard, catalogo, aulas e progresso do aluno.
+- Dashboard, catalogo, aulas e progresso administrativo.
+- Studio Admin.
+- Versao mobile do dashboard do aluno.
+
 ## 11. Variaveis de ambiente
 
 | Variavel | Uso | Default |
@@ -620,4 +640,3 @@ Resultado:
 4. Adicionar testes automatizados para matricula, liberacao semanal, pagamento por aula e progresso.
 5. Evoluir validacao de cartao para integracao real com provedor de pagamento, sem persistir PAN/CVV.
 6. Criar migrations versionadas formais, substituindo as migracoes simples em startup.
-

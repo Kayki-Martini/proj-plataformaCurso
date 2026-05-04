@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from datetime import datetime, timedelta, UTC
 
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -9,7 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Column, DateTime, Integer, String, create_engine
+from sqlalchemy import Column, DateTime, Integer, String, create_engine, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
@@ -25,6 +26,8 @@ JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-jwt-key")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "720"))
 ADMIN_REGISTRATION_CODE = os.getenv("ADMIN_REGISTRATION_CODE", "ead-admin-2026")
+DATABASE_MAX_RETRIES = int(os.getenv("DATABASE_MAX_RETRIES", "30"))
+DATABASE_RETRY_DELAY_SECONDS = float(os.getenv("DATABASE_RETRY_DELAY_SECONDS", "2"))
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -127,8 +130,27 @@ def get_current_user(
     return user
 
 
+def wait_for_database() -> None:
+    for attempt in range(1, DATABASE_MAX_RETRIES + 1):
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            return
+        except Exception:
+            if attempt == DATABASE_MAX_RETRIES:
+                raise
+            logger.warning(
+                "Banco indisponivel na tentativa %s/%s. Tentando novamente em %s segundos.",
+                attempt,
+                DATABASE_MAX_RETRIES,
+                DATABASE_RETRY_DELAY_SECONDS,
+            )
+            time.sleep(DATABASE_RETRY_DELAY_SECONDS)
+
+
 @app.on_event("startup")
 def on_startup():
+    wait_for_database()
     Base.metadata.create_all(bind=engine)
     logger.info("auth-service iniciado.")
 

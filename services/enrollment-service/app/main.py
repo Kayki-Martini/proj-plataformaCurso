@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from datetime import date, datetime, timedelta
 
 import requests
@@ -9,7 +10,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Column, DateTime, Integer, String, UniqueConstraint, create_engine, func
+from sqlalchemy import Column, DateTime, Integer, String, UniqueConstraint, create_engine, func, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 
@@ -28,6 +29,8 @@ JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://localhost:8002")
 COURSE_SERVICE_URL = os.getenv("COURSE_SERVICE_URL", "http://localhost:8003")
 REQUEST_TIMEOUT = 8
+DATABASE_MAX_RETRIES = int(os.getenv("DATABASE_MAX_RETRIES", "30"))
+DATABASE_RETRY_DELAY_SECONDS = float(os.getenv("DATABASE_RETRY_DELAY_SECONDS", "2"))
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -142,8 +145,27 @@ def touch_user_retention(auth_user_id: str, token: str, reason: str) -> None:
         logger.warning("Nao foi possivel atualizar a persistencia do aluno %s: %s", auth_user_id, exc)
 
 
+def wait_for_database() -> None:
+    for attempt in range(1, DATABASE_MAX_RETRIES + 1):
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            return
+        except Exception:
+            if attempt == DATABASE_MAX_RETRIES:
+                raise
+            logger.warning(
+                "Banco indisponivel na tentativa %s/%s. Tentando novamente em %s segundos.",
+                attempt,
+                DATABASE_MAX_RETRIES,
+                DATABASE_RETRY_DELAY_SECONDS,
+            )
+            time.sleep(DATABASE_RETRY_DELAY_SECONDS)
+
+
 @app.on_event("startup")
 def on_startup():
+    wait_for_database()
     Base.metadata.create_all(bind=engine)
     logger.info("enrollment-service iniciado.")
 

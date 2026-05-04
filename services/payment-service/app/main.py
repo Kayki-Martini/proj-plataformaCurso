@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from datetime import datetime
 from decimal import Decimal
 import re
@@ -29,6 +30,8 @@ LESSON_SERVICE_URL = os.getenv("LESSON_SERVICE_URL", "http://localhost:8005")
 ENROLLMENT_SERVICE_URL = os.getenv("ENROLLMENT_SERVICE_URL", "http://localhost:8004")
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://localhost:8002")
 REQUEST_TIMEOUT = 8
+DATABASE_MAX_RETRIES = int(os.getenv("DATABASE_MAX_RETRIES", "30"))
+DATABASE_RETRY_DELAY_SECONDS = float(os.getenv("DATABASE_RETRY_DELAY_SECONDS", "2"))
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -207,8 +210,27 @@ def run_migrations():
         connection.execute(text("CREATE INDEX IF NOT EXISTS idx_payments_lesson ON payments(lesson_id);"))
 
 
+def wait_for_database() -> None:
+    for attempt in range(1, DATABASE_MAX_RETRIES + 1):
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            return
+        except Exception:
+            if attempt == DATABASE_MAX_RETRIES:
+                raise
+            logger.warning(
+                "Banco indisponivel na tentativa %s/%s. Tentando novamente em %s segundos.",
+                attempt,
+                DATABASE_MAX_RETRIES,
+                DATABASE_RETRY_DELAY_SECONDS,
+            )
+            time.sleep(DATABASE_RETRY_DELAY_SECONDS)
+
+
 @app.on_event("startup")
 def on_startup():
+    wait_for_database()
     Base.metadata.create_all(bind=engine)
     run_migrations()
     logger.info("payment-service iniciado.")

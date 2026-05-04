@@ -1,6 +1,7 @@
 import calendar
 import logging
 import os
+import time
 from datetime import datetime
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
@@ -41,6 +42,8 @@ app.add_middleware(
 PERSISTENCE_POLICY_MONTHS = 6
 PERSISTENCE_STATUS_ACTIVE = "active"
 PERSISTENCE_STATUS_EXPIRED = "expired"
+DATABASE_MAX_RETRIES = int(os.getenv("DATABASE_MAX_RETRIES", "30"))
+DATABASE_RETRY_DELAY_SECONDS = float(os.getenv("DATABASE_RETRY_DELAY_SECONDS", "2"))
 
 
 class Student(Base):
@@ -204,6 +207,24 @@ def serialize_student(student: Student) -> StudentResponse:
     )
 
 
+def wait_for_database() -> None:
+    for attempt in range(1, DATABASE_MAX_RETRIES + 1):
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            return
+        except Exception:
+            if attempt == DATABASE_MAX_RETRIES:
+                raise
+            logger.warning(
+                "Banco indisponivel na tentativa %s/%s. Tentando novamente em %s segundos.",
+                attempt,
+                DATABASE_MAX_RETRIES,
+                DATABASE_RETRY_DELAY_SECONDS,
+            )
+            time.sleep(DATABASE_RETRY_DELAY_SECONDS)
+
+
 def run_migrations():
     with engine.begin() as connection:
         connection.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS education_level VARCHAR(40) NOT NULL DEFAULT 'medio';"))
@@ -240,6 +261,7 @@ def run_migrations():
 
 @app.on_event("startup")
 def on_startup():
+    wait_for_database()
     Base.metadata.create_all(bind=engine)
     run_migrations()
     logger.info("user-service iniciado.")
